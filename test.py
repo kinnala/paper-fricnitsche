@@ -98,9 +98,9 @@ for i in range(2):
             normal = ((1. / (alpha * w.h) * ju * jv - mu * jv - mv * ju)
                       * (np.abs(w.x[1]) <= limit))
             tangent = ((1. / (alpha * w.h) * jut * jvt - mut * jvt - mvt * jut)
-                       * (np.abs(w.x[1]) <= limit))
+                        * (np.abs(w.x[1]) <= 0.2))
 
-            return normal + 0.0*tangent
+            return normal + tangent
 
         @BilinearForm
         def bilin_mortar_fixed(u, v, w):
@@ -125,11 +125,23 @@ for i in range(2):
         K[i][j] += asm(bilin_mortar, mb[j], mb[i])
 
     @LinearForm
-    def lin_mortar(v, w):
+    def lin_mortar_orig(v, w):
         jv = (-1.) ** i * dot(v, w.n)
         mv = .5 * ddot(prod(w.n, w.n), C(sym_grad(v)))
         return ((1. / (alpha * w.h) * gap(w.x) * jv - gap(w.x) * mv)
                 * (np.abs(w.x[1]) <= limit))
+
+    @LinearForm
+    def lin_mortar(v, w):
+        t = w.n.copy()
+        t[0] = w.n[1]
+        t[1] = -w.n[0]
+        jv = (-1.) ** i * dot(v, t)
+        scale = 0.01
+        return (w.x[1] <= -0.2) * (-scale) * jv + (w.x[1] >= 0.2) * (scale) * jv
+        #mv = .5 * ddot(prod(w.n, w.n), C(sym_grad(v)))
+        #return ((1. / (alpha * w.h) * gap(w.x) * jv - gap(w.x) * mv)
+        #        * (np.abs(w.x[1]) <= limit))
 
     f[i] = asm(lin_mortar, mb[i])
 
