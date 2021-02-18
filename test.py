@@ -9,12 +9,12 @@ from skfem.io.json import from_file, to_file
 from pathlib import Path
 
 
-m = MeshTri.init_sqsymmetric().refined(3).translated((0., -.5))
+m = MeshTri.init_sqsymmetric().refined(4).translated((0., -.5))
 
 M = (
     (MeshLine(np.linspace(0, 1, 6)) * MeshLine(np.linspace(-1, 1, 10)))
     .translated((1.0, 0.0))
-    .refined(2)
+    .refined(3)
 )
 
 # define elements and bases
@@ -49,7 +49,7 @@ weakform1 = linear_elasticity(Lambda, Mu)
 weakform2 = linear_elasticity(Lambda, Mu)
 C = linear_stress(Lambda, Mu)
 
-alpha = 0.01
+alpha = 0.001
 limit = 0.5
 
 # assemble the stiffness matrices
@@ -72,18 +72,49 @@ for i in range(2):
             ju = (-1.) ** j * dot(u, w.n)
             jv = (-1.) ** i * dot(v, w.n)
             nxn = prod(w.n, w.n)
-            mu = .5 * ddot(nxn, C(sym_grad(u))) * (i == 0)
-            mv = .5 * ddot(nxn, C(sym_grad(v))) * (i == 0)
+            mu = .5 * ddot(nxn, C(sym_grad(u)))
+            mv = .5 * ddot(nxn, C(sym_grad(v)))
             return ((1. / (alpha * w.h) * ju * jv - mu * jv - mv * ju)
                     * (np.abs(w.x[1]) <= limit))
 
         @BilinearForm
         def bilin_mortar(u, v, w):
+            ju = (-1.) ** j * dot(u, w.n)
+            jv = (-1.) ** i * dot(v, w.n)
+            t = w.n.copy()
+            t[0] = w.n[1]
+            t[1] = -w.n[0]
+            nxn = prod(w.n, w.n)
+            nxt = prod(w.n, t)
+            mu = .5 * ddot(nxn, C(sym_grad(u)))
+            mv = .5 * ddot(nxn, C(sym_grad(v)))
+
+            jut = (-1.) ** j * dot(u, t)
+            jvt = (-1.) ** i * dot(v, t)
+            mut = .5 * ddot(nxt, C(sym_grad(u)))
+            mvt = .5 * ddot(nxt, C(sym_grad(v)))
+
+
+            normal = ((1. / (alpha * w.h) * ju * jv - mu * jv - mv * ju)
+                      * (np.abs(w.x[1]) <= limit))
+            tangent = ((1. / (alpha * w.h) * jut * jvt - mut * jvt - mvt * jut)
+                       * (np.abs(w.x[1]) <= limit))
+
+            return normal + 0.0*tangent
+
+        @BilinearForm
+        def bilin_mortar_fixed(u, v, w):
             ju = (-1.) ** j * u
             jv = (-1.) ** i * v
             nxn = prod(w.n, w.n)
-            sigma = .5 * C(sym_grad(u)) * (i == 0)
-            tau = .5 * C(sym_grad(v)) * (i == 0)
+            sigma = .5 * C(sym_grad(u))# * (i == 0)
+            tau = .5 * C(sym_grad(v))# * (i == 0)
+            #if i == 0:
+            #    sigma = C(sym_grad(u))
+            #    tau = C(sym_grad(v))
+            #else:
+            #    sigma = 0 * C(sym_grad(u))
+            #    tau = 0 * C(sym_grad(v))
             # mu = .5 * ddot(nxn, C(sym_grad(u))) * (i == 0)
             # mv = .5 * ddot(nxn, C(sym_grad(v))) * (i == 0)
             return ((1. / (alpha * w.h) * dot(ju, jv)
@@ -126,6 +157,11 @@ x[ib.get_dofs(lambda x: x[0] == 0.0).facet['u^1']] = 0.1
 x = solve(*condense(K, f, I=I, x=x))
 
 
+e_dg = ElementTriDG(ElementTriP1())
+E_dg = ElementQuadDG(ElementQuad1())
+
+fbasis = ExteriorFacetBasis(m, e_dg, facets=m.facets_satisfying(lambda x: x[0] == 1))
+
 # create a displaced mesh
 sf = 1
 
@@ -138,8 +174,8 @@ M.p[1] = M.p[1] + sf * x[i2][Ib.nodal_dofs[1]]
 
 # post processing
 s, S = {}, {}
-e_dg = ElementTriDG(ElementTriP1())
-E_dg = ElementQuadDG(ElementQuad1())
+
+
 
 for itr in range(2):
     for jtr in range(2):
@@ -173,13 +209,26 @@ vonmises2 = np.sqrt(.5 * ((S[0, 0] - S[1, 1]) ** 2 +
                           (S[2, 2] - S[0, 0]) ** 2 +
                           6. * S[0, 1]**2))
 
+ibasis1, y1 = fbasis.trace(s[0, 0], lambda p: p[1], ElementLineP1())
+ibasis2, y2 = fbasis.trace(s[0, 1], lambda p: p[1], ElementLineP1())
 
+mini = np.max([np.min(vonmises1), np.min(vonmises2)])
+maxi = np.min([np.max(vonmises1), np.max(vonmises2)])
+vonmises1 = np.clip(vonmises1, 0.06, 0.07)
+vonmises2 = np.clip(vonmises2, 0.06, 0.07)
+#vonmises2 = np.clip(vonmises2, np.min(vonmises1), np.max(vonmises1))
 
 from os.path import splitext
 from sys import argv
 from skfem.visuals.matplotlib import *
-ax = plot(ib_dg, vonmises1, shading='gouraud')
+ax = plot(ib_dg, vonmises1, Nrefs=3, shading='gouraud')
+#ax = plot(ib_dg, s[0,0], Nrefs=3, shading='gouraud')
 draw(m, ax=ax)
 plot(Ib_dg, vonmises2, ax=ax, Nrefs=3, shading='gouraud')
+#plot(Ib_dg, S[0,0], ax=ax, Nrefs=3, shading='gouraud')
 draw(M, ax=ax)
+show()
+plot(ibasis1, y1, Nrefs=0)
+show()
+plot(ibasis2, y2, Nrefs=0)
 show()
