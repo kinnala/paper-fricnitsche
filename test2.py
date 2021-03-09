@@ -23,6 +23,8 @@ weakform = linear_elasticity(Lambda, Mu)
 C = linear_stress(Lambda, Mu)
 
 alpha = 1e-2
+limit = 0.35
+kappa = 0.03
 
 K = asm(weakform, basis)
 
@@ -57,13 +59,35 @@ def nitsche(u, v, w):
     svt = ddot(nxt, C(sym_grad(v)))
 
     normal = (1. / (alpha * w.h) * un * vn - sun * vn - svn * un + alpha * w.h * sun * svn)
-    tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut + alpha * w.h * sut * svt) * (np.abs(y) < 0.1)
+    tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut + alpha * w.h * sut * svt) * (np.abs(y) < limit)
 
     return normal + tangent
 
 B = asm(nitsche, fbasis)
 
-f = np.zeros(K.shape[0])
+@LinearForm
+def nitsche_load(v, w):
+
+    x, y = w.x
+
+    # helper vectors
+    t = w.n.copy()
+    t[0] = w.n[1]
+    t[1] = -w.n[0]
+    nxn = prod(w.n, w.n)
+    nxt = prod(w.n, t)
+
+    # components
+    vt = dot(v, t)
+    vn = dot(v, w.n)
+    svn = ddot(nxn, C(sym_grad(v)))
+    svt = ddot(nxt, C(sym_grad(v)))
+
+    skappa = kappa * np.sign(y)
+
+    return skappa * vt * (np.abs(y) >= limit)
+
+f = asm(nitsche_load, fbasis)
 
 D = basis.get_dofs(lambda x: x[0] == 0.0)
 
@@ -111,7 +135,8 @@ from skfem.visuals.matplotlib import *
 
 # stresses
 ax = plot(basis_dg, vonmises, Nrefs=3, shading='gouraud')
-draw(m, ax=ax)
+mdefo = m.translated(x[basis.nodal_dofs])
+draw(mdefo, ax=ax)
 
 # normal lagmult
 plot(tbasis_n, Lam_n, Nrefs=0, color='k-')
