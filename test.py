@@ -15,13 +15,21 @@ M = (
     (MeshLine(np.linspace(0, 1, 6)) * MeshLine(np.linspace(-1, 1, 10)))
     .translated((1.0, 0.0))
     .refined(3)
+    .to_meshtri()
 )
 
+M = MeshTri.init_sqsymmetric().refined(4).translated((1., -.5))
+
+#m = m.refined()
+M = M.refined()
+
 # define elements and bases
-e1 = ElementTriP2()
+e1 = ElementTriP1()
 e = ElementVector(e1)
 
-E1 = ElementQuad2()
+#E1 = ElementQuad1()
+#E = ElementVector(E1)
+E1 = ElementTriP1()
 E = ElementVector(E1)
 
 ib = InteriorBasis(m, e, intorder=4)
@@ -42,15 +50,19 @@ mb = [
 
 # define bilinear forms
 E = 1.0
-nu = 0.3
+nu = 0.45
 Lambda, Mu = lame_parameters(E, nu)
 
 weakform1 = linear_elasticity(Lambda, Mu)
 weakform2 = linear_elasticity(Lambda, Mu)
 C = linear_stress(Lambda, Mu)
 
-alpha = 0.001
+alpha = 0.0001
 limit = 0.5
+limit2 = 0.0
+
+def indicator(y):
+    return (np.abs(y) >= limit2)
 
 # assemble the stiffness matrices
 K1 = asm(weakform1, ib)
@@ -66,16 +78,6 @@ def gap(x):
 # assemble the mortar matrices
 for i in range(2):
     for j in range(2):
-
-        @BilinearForm
-        def bilin_mortar_orig(u, v, w):
-            ju = (-1.) ** j * dot(u, w.n)
-            jv = (-1.) ** i * dot(v, w.n)
-            nxn = prod(w.n, w.n)
-            mu = .5 * ddot(nxn, C(sym_grad(u)))
-            mv = .5 * ddot(nxn, C(sym_grad(v)))
-            return ((1. / (alpha * w.h) * ju * jv - mu * jv - mv * ju)
-                    * (np.abs(w.x[1]) <= limit))
 
         @BilinearForm
         def bilin_mortar(u, v, w):
@@ -94,42 +96,30 @@ for i in range(2):
             mut = .5 * ddot(nxt, C(sym_grad(u)))
             mvt = .5 * ddot(nxt, C(sym_grad(v)))
 
+            if j==1:
+                mu = 0. * mu
+                mut = 0. * mut
+            else:
+                mu = 2. * mu
+                mut = 2. * mut
 
-            normal = ((1. / (alpha * w.h) * ju * jv - mu * jv - mv * ju)
+            if i==1:
+                mv = 0. * mv
+                mvt = 0. * mvt
+            else:
+                mv = 2. * mv
+                mvt = 2. * mvt
+
+
+            normal = ((1. / (alpha * w.h) * ju * jv - mu * jv - mv * ju + alpha * w.h * mu * mv)
                       * (np.abs(w.x[1]) <= limit))
-            tangent = ((1. / (alpha * w.h) * jut * jvt - mut * jvt - mvt * jut)
-                        * (np.abs(w.x[1]) <= 0.2))
+            tangent = ((1. / (alpha * w.h) * jut * jvt - mut * jvt - mvt * jut + alpha * w.h * mut * mvt)
+                        * (indicator(w.x[1])))
+            #tangent2 = alpha * w.h * mut * mvt * (np.abs(w.x[1]) > limit2)
 
-            return normal + tangent
-
-        @BilinearForm
-        def bilin_mortar_fixed(u, v, w):
-            ju = (-1.) ** j * u
-            jv = (-1.) ** i * v
-            nxn = prod(w.n, w.n)
-            sigma = .5 * C(sym_grad(u))# * (i == 0)
-            tau = .5 * C(sym_grad(v))# * (i == 0)
-            #if i == 0:
-            #    sigma = C(sym_grad(u))
-            #    tau = C(sym_grad(v))
-            #else:
-            #    sigma = 0 * C(sym_grad(u))
-            #    tau = 0 * C(sym_grad(v))
-            # mu = .5 * ddot(nxn, C(sym_grad(u))) * (i == 0)
-            # mv = .5 * ddot(nxn, C(sym_grad(v))) * (i == 0)
-            return ((1. / (alpha * w.h) * dot(ju, jv)
-                     - ddot(sigma, prod(jv, w.n))
-                     - ddot(tau, prod(ju, w.n)))
-                    * (np.abs(w.x[1]) <= limit))
+            return normal + tangent #+ tangent2
 
         K[i][j] += asm(bilin_mortar, mb[j], mb[i])
-
-    @LinearForm
-    def lin_mortar_orig(v, w):
-        jv = (-1.) ** i * dot(v, w.n)
-        mv = .5 * ddot(prod(w.n, w.n), C(sym_grad(v)))
-        return ((1. / (alpha * w.h) * gap(w.x) * jv - gap(w.x) * mv)
-                * (np.abs(w.x[1]) <= limit))
 
     @LinearForm
     def lin_mortar(v, w):
@@ -137,13 +127,15 @@ for i in range(2):
         t[0] = w.n[1]
         t[1] = -w.n[0]
         jv = (-1.) ** i * dot(v, t)
-        scale = 0.01
-        return (w.x[1] <= -0.2) * (-scale) * jv + (w.x[1] >= 0.2) * (scale) * jv
+        #jv = dot(v, t)
+        s = 3e-5
+        ind = 1 - (indicator(w.x[1]))
+        return s * ind * jv
         #mv = .5 * ddot(prod(w.n, w.n), C(sym_grad(v)))
         #return ((1. / (alpha * w.h) * gap(w.x) * jv - gap(w.x) * mv)
         #        * (np.abs(w.x[1]) <= limit))
 
-    f[i] = asm(lin_mortar, mb[i])
+    f[i] = 0*asm(lin_mortar, mb[i])
 
 import scipy.sparse
 K = (scipy.sparse.bmat(K)).tocsr()
@@ -164,13 +156,16 @@ D = np.concatenate((D1, D2 + ib.N))
 I = np.setdiff1d(np.arange(K.shape[0]), D)
 
 x[ib.get_dofs(lambda x: x[0] == 0.0).nodal['u^1']] = 0.1
-x[ib.get_dofs(lambda x: x[0] == 0.0).facet['u^1']] = 0.1
+#x[ib.get_dofs(lambda x: x[0] == 0.0).facet['u^1']] = 0.1
 
 x = solve(*condense(K, f, I=I, x=x))
 
 
-e_dg = ElementTriDG(ElementTriP1())
-E_dg = ElementQuadDG(ElementQuad1())
+#e_dg = ElementTriDG(ElementTriP1())
+#E_dg = ElementQuadDG(ElementQuad1())
+e_dg = ElementTriDG(ElementTriP0())
+E_dg = ElementTriDG(ElementTriP0())
+#E_dg = ElementQuadDG(ElementQuad0())
 
 fbasis = ExteriorFacetBasis(m, e_dg, facets=m.facets_satisfying(lambda x: x[0] == 1))
 
@@ -221,13 +216,13 @@ vonmises2 = np.sqrt(.5 * ((S[0, 0] - S[1, 1]) ** 2 +
                           (S[2, 2] - S[0, 0]) ** 2 +
                           6. * S[0, 1]**2))
 
-ibasis1, y1 = fbasis.trace(s[0, 0], lambda p: p[1], ElementLineP1())
-ibasis2, y2 = fbasis.trace(s[0, 1], lambda p: p[1], ElementLineP1())
+ibasis1, y1 = fbasis.trace(s[0, 0], lambda p: p[1], ElementTriP1())
+ibasis2, y2 = fbasis.trace(s[0, 1], lambda p: p[1], ElementTriP1())
 
 mini = np.max([np.min(vonmises1), np.min(vonmises2)])
 maxi = np.min([np.max(vonmises1), np.max(vonmises2)])
-vonmises1 = np.clip(vonmises1, 0.06, 0.07)
-vonmises2 = np.clip(vonmises2, 0.06, 0.07)
+vonmises1 = np.clip(vonmises1, 0.0, 0.1)
+vonmises2 = np.clip(vonmises2, 0.0, 0.1)
 #vonmises2 = np.clip(vonmises2, np.min(vonmises1), np.max(vonmises1))
 
 from os.path import splitext
