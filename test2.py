@@ -7,7 +7,7 @@ import numpy as np
 
 m = MeshTri.init_sqsymmetric().refined(4).translated((0., -.5))
 
-e1 = ElementTriP1()
+e1 = ElementTriP2()
 e = ElementVector(e1)
 
 basis = InteriorBasis(m, e, intorder=4)
@@ -22,8 +22,8 @@ Lambda, Mu = lame_parameters(E, nu)
 weakform = linear_elasticity(Lambda, Mu)
 C = linear_stress(Lambda, Mu)
 
-alpha = 1e-2
-kappa = 0.03
+alpha = 1e-4
+kappa = 0.01
 
 K = asm(weakform, basis)
 
@@ -103,6 +103,7 @@ for itr in range(10):
 
     x = np.zeros(K.shape[0])
     x[D.nodal['u^1']] = 0.1
+    x[D.facet['u^1']] = 0.1
 
     x = solve(*condense(K + B, f, D=D, x=x))
 
