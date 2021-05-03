@@ -23,7 +23,6 @@ weakform = linear_elasticity(Lambda, Mu)
 C = linear_stress(Lambda, Mu)
 
 alpha = 1e-2
-limit = 0.35
 kappa = 0.03
 
 K = asm(weakform, basis)
@@ -33,10 +32,10 @@ def gap(x):
     """Initial gap between the bodies."""
     return 0.0 * x[0]
 
-
 @BilinearForm
 def nitsche(u, v, w):
 
+    uprev = w['prev']
     x, y = w.x
 
     # helper vectors
@@ -58,16 +57,17 @@ def nitsche(u, v, w):
     sut = ddot(nxt, C(sym_grad(u)))
     svt = ddot(nxt, C(sym_grad(v)))
 
+    lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
+
     normal = (1. / (alpha * w.h) * un * vn - sun * vn - svn * un + alpha * w.h * sun * svn)
-    tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut + alpha * w.h * sut * svt) * (np.abs(y) < limit)
+    tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut + alpha * w.h * sut * svt) * (np.abs(lambdat) < kappa)
 
     return normal + tangent
-
-B = asm(nitsche, fbasis)
 
 @LinearForm
 def nitsche_load(v, w):
 
+    uprev = w['prev']
     x, y = w.x
 
     # helper vectors
@@ -85,16 +85,29 @@ def nitsche_load(v, w):
 
     skappa = kappa * np.sign(y)
 
-    return skappa * vt * (np.abs(y) >= limit)
+    lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
 
-f = asm(nitsche_load, fbasis)
+    return skappa * vt * (np.abs(lambdat) >= kappa)
 
-D = basis.get_dofs(lambda x: x[0] == 0.0)
+xprev = basis.zeros()
 
-x = np.zeros(K.shape[0])
-x[D.nodal['u^1']] = 0.1
+for itr in range(10):
 
-x = solve(*condense(K + B, f, D=D, x=x))
+    print(itr)
+
+    B = asm(nitsche, fbasis, prev=fbasis.interpolate(xprev))
+
+    f = asm(nitsche_load, fbasis, prev=fbasis.interpolate(xprev))
+
+    D = basis.get_dofs(lambda x: x[0] == 0.0)
+
+    x = np.zeros(K.shape[0])
+    x[D.nodal['u^1']] = 0.1
+
+    x = solve(*condense(K + B, f, D=D, x=x))
+
+    print(np.linalg.norm(x - xprev))
+    xprev = x.copy()
 
 
 # calculate stress
@@ -113,7 +126,6 @@ for itr in range(2):
         @BilinearForm
         def mass(u, v, w):
             return u * v
-
 
         s[itr, jtr] = solve(asm(mass, basis_dg),
                             asm(proj_cauchy, basis, basis_dg) @ x)
@@ -139,9 +151,9 @@ mdefo = m.translated(x[basis.nodal_dofs])
 draw(mdefo, ax=ax)
 
 # normal lagmult
-plot(tbasis_n, Lam_n, Nrefs=0, color='k-')
+plot(tbasis_n, Lam_n, Nrefs=0, color='k.')
 
 # tangential lagmult
-plot(tbasis_t, Lam_t, Nrefs=0, color='k-')
+plot(tbasis_t, Lam_t, Nrefs=0, color='k.')
 
 show()
