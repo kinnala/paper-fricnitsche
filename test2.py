@@ -22,8 +22,9 @@ Lambda, Mu = lame_parameters(E, nu)
 weakform = linear_elasticity(Lambda, Mu)
 C = linear_stress(Lambda, Mu)
 
-alpha = 1e-4
-kappa = 0.01
+alpha = 1e-3
+kappa = 0.015
+alternative = True
 
 K = asm(weakform, basis)
 
@@ -57,10 +58,14 @@ def nitsche(u, v, w):
     sut = ddot(nxt, C(sym_grad(u)))
     svt = ddot(nxt, C(sym_grad(v)))
 
-    lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
 
     normal = (1. / (alpha * w.h) * un * vn - sun * vn - svn * un + alpha * w.h * sun * svn)
-    tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut + alpha * w.h * sut * svt) * (np.abs(lambdat) < kappa)
+    if alternative:
+        lambdat = 1. / (alpha) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
+        tangent = (1. / (alpha) * ut * vt - sut * vt - svt * ut + alpha * sut * svt) * (np.abs(lambdat) < kappa)
+    else:
+        lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
+        tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut + alpha * w.h * sut * svt) * (np.abs(lambdat) < kappa)
 
     return normal + tangent
 
@@ -85,7 +90,10 @@ def nitsche_load(v, w):
 
     skappa = kappa * np.sign(y)
 
-    lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
+    if alternative:
+        lambdat = 1. / (alpha) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
+    else:
+        lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
 
     return skappa * vt * (np.abs(lambdat) >= kappa)
 
@@ -105,14 +113,14 @@ for itr in range(10):
     x[D.nodal['u^1']] = 0.1
     x[D.facet['u^1']] = 0.1
 
-    x = solve(*condense(K + B, f, D=D, x=x))
+    x = solve(*condense(K + B, f, D=D.all('u^1'), x=x))
 
     print(np.linalg.norm(x - xprev))
     xprev = x.copy()
 
 
 # calculate stress
-e_dg = ElementTriDG(ElementTriP0())
+e_dg = ElementTriDG(ElementTriP1())
 basis_dg = InteriorBasis(m, e_dg, intorder=4)
 fbasis_dg = FacetBasis(m, e_dg, facets=m.facets_satisfying(lambda x: x[0] == 1.0))
 s = {}
@@ -139,22 +147,22 @@ vonmises = np.sqrt(.5 * ((s[0, 0] - s[1, 1]) ** 2 +
                          (s[2, 2] - s[0, 0]) ** 2 +
                          6. * s[0, 1]**2))
 
-tbasis_n, Lam_n = fbasis_dg.trace(s[0, 0], lambda p: p[1], ElementTriP0())
-tbasis_t, Lam_t = fbasis_dg.trace(s[0, 1], lambda p: p[1], ElementTriP0())
+tbasis_n, Lam_n = fbasis_dg.trace(s[0, 0], lambda p: p[1], ElementTriP1())
+tbasis_t, Lam_t = fbasis_dg.trace(s[0, 1], lambda p: p[1], ElementTriP1())
 
 
 # plotting
 from skfem.visuals.matplotlib import *
 
 # stresses
-ax = plot(basis_dg, vonmises, Nrefs=3, shading='gouraud')
+ax = plot(basis_dg, s[0, 1], Nrefs=3, shading='gouraud')
 mdefo = m.translated(x[basis.nodal_dofs])
 draw(mdefo, ax=ax)
 
 # normal lagmult
-plot(tbasis_n, Lam_n, Nrefs=0, color='k.')
+plot(tbasis_n, Lam_n, Nrefs=1, color='k.')
 
 # tangential lagmult
-plot(tbasis_t, Lam_t, Nrefs=0, color='k.')
+plot(tbasis_t, Lam_t, Nrefs=1, color='k.')
 
 show()
