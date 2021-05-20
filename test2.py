@@ -2,10 +2,13 @@ from skfem import *
 from skfem.models.elasticity import (linear_elasticity,
                                      lame_parameters,
                                      linear_stress)
-from skfem.models.helpers import dot, ddot, prod, sym_grad
+from skfem.models.helpers import dot, ddot, prod, sym_grad, grad
 import numpy as np
 
-m = MeshTri.init_sqsymmetric().refined(4).translated((0., -.5))
+m = (MeshTri
+     .init_sqsymmetric()
+     .refined(1)
+     .translated((0., -.5)))
 
 e1 = ElementTriP2()
 e = ElementVector(e1)
@@ -23,7 +26,7 @@ weakform = linear_elasticity(Lambda, Mu)
 C = linear_stress(Lambda, Mu)
 
 alpha = 1e-3
-kappa = 0.015
+kappa = 0.02
 alternative = True
 
 K = asm(weakform, basis)
@@ -99,9 +102,7 @@ def nitsche_load(v, w):
 
 xprev = basis.zeros()
 
-for itr in range(10):
-
-    print(itr)
+for itr in range(40):
 
     B = asm(nitsche, fbasis, prev=fbasis.interpolate(xprev))
 
@@ -115,8 +116,17 @@ for itr in range(10):
 
     x = solve(*condense(K + B, f, D=D.all('u^1'), x=x))
 
-    print(np.linalg.norm(x - xprev))
+    diff = np.linalg.norm(x - xprev)
+    print(diff)
+    if diff < 1e-8:
+        break
     xprev = x.copy()
+
+L2 = np.sqrt(Functional(lambda w: w['sol'].value[0] ** 2 + w['sol'].value[1] ** 2)
+             .assemble(basis, sol=basis.interpolate(x)))
+H1 = np.sqrt(Functional(lambda w: ddot(grad(w['sol']), grad(w['sol'])))
+             .assemble(basis, sol=basis.interpolate(x)))
+print("| {} | {} | {} |".format(m.param(), L2, H1))
 
 
 # calculate stress
@@ -147,7 +157,7 @@ vonmises = np.sqrt(.5 * ((s[0, 0] - s[1, 1]) ** 2 +
                          (s[2, 2] - s[0, 0]) ** 2 +
                          6. * s[0, 1]**2))
 
-tbasis_n, Lam_n = fbasis_dg.trace(s[0, 0], lambda p: p[1], ElementTriP1())
+tbasis_n, Lam_n = fbasis_dg.trace(-s[0, 0], lambda p: p[1], ElementTriP1())
 tbasis_t, Lam_t = fbasis_dg.trace(s[0, 1], lambda p: p[1], ElementTriP1())
 
 
@@ -157,7 +167,7 @@ from skfem.visuals.matplotlib import *
 # stresses
 ax = plot(basis_dg, s[0, 1], Nrefs=3, shading='gouraud')
 mdefo = m.translated(x[basis.nodal_dofs])
-draw(mdefo, ax=ax)
+draw(mdefo, ax=ax, c='w')
 
 # normal lagmult
 plot(tbasis_n, Lam_n, Nrefs=1, color='k.')
