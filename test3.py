@@ -78,105 +78,106 @@ for k in [1, 2, 3, 4]:#, 5, 6]:
 
     @LinearForm
     def nitsche_load(v, w):
-            
-            uprev = w['prev']
-            x, y = w.x
-            
-            # helper vectors
-            t = w.n.copy()
-            t[0] = w.n[1]
-            t[1] = -w.n[0]
-            nxn = prod(w.n, w.n)
-            nxt = prod(w.n, t)
-            
-            # components
-            vt = dot(v, t)
-            vn = dot(v, w.n)
-            svn = ddot(nxn, C(sym_grad(v)))
-            svt = ddot(nxt, C(sym_grad(v)))
-            
-            skappa = kappa * np.sign(y)
-            
-            if alternative:
-                lambdat = 1. / (alpha) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
-            else:
-                lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
-                
-            return skappa * vt * (np.abs(lambdat) >= kappa)
-            
+
+        uprev = w['prev']
+        x, y = w.x
+
+        # helper vectors
+        t = w.n.copy()
+        t[0] = w.n[1]
+        t[1] = -w.n[0]
+        nxn = prod(w.n, w.n)
+        nxt = prod(w.n, t)
+
+        # components
+        vt = dot(v, t)
+        vn = dot(v, w.n)
+        svn = ddot(nxn, C(sym_grad(v)))
+        svt = ddot(nxt, C(sym_grad(v)))
+
+        skappa = kappa * np.sign(y)
+
+        if alternative:
+            lambdat = 1. / (alpha) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
+        else:
+            lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
+
+        return skappa * vt * (np.abs(lambdat) >= kappa)
+
     xprev = basis.zeros()
-            
+
     for itr in range(40):
-                
+
             B = asm(nitsche, fbasis, prev=fbasis.interpolate(xprev))
-                
+
             f = asm(nitsche_load, fbasis, prev=fbasis.interpolate(xprev))
-                
+
             D = basis.get_dofs(lambda x: x[0] == 0.0)
-                
+
             x = np.zeros(K.shape[0])
             x[D.nodal['u^1']] = 0.1
             x[D.facet['u^1']] = 0.1
-            
+
             x = solve(*condense(K + B, f, D=D.all('u^1'), x=x))
-            
+
             diff = np.linalg.norm(x - xprev)
             #print(diff)
             if diff < 1e-8:
                 break
             xprev = x.copy()
-            
+
     err = np.sqrt(Functional(lambda w: w['sol'].value[0] ** 2 + w['sol'].value[1] ** 2 + ddot(grad(w['sol']), grad(w['sol'])))
                   .assemble(basis, sol=basis.interpolate(x)))
     print("{},{},{}".format(m.param(), err, abs(err-errprev) if errprev is not None else "nan"))
 
     errprev = err
-            
+
     # calculate stress
     e_dg = ElementTriDG(ElementTriP1())
     basis_dg = InteriorBasis(m, e_dg, intorder=4)
     fbasis_dg = FacetBasis(m, e_dg, facets=m.facets_satisfying(lambda x: x[0] == 1.0))
     s = {}
-    
+
     for itr in range(2):
         for jtr in range(2):
-            
+
             @BilinearForm
             def proj_cauchy(u, v, w):
                 return C(sym_grad(u))[itr, jtr] * v
-            
+
             @BilinearForm
             def mass(u, v, w):
                 return u * v
-            
+
             s[itr, jtr] = solve(asm(mass, basis_dg),
                                 asm(proj_cauchy, basis, basis_dg) @ x)
-            
+
             # off-plane component
     s[2, 2] = nu * (s[0, 0] + s[1, 1])
-            
+
     vonmises = np.sqrt(.5 * ((s[0, 0] - s[1, 1]) ** 2 +
                              (s[1, 1] - s[2, 2]) ** 2 +
                              (s[2, 2] - s[0, 0]) ** 2 +
                              6. * s[0, 1]**2))
-    
+
     tbasis_n, Lam_n = fbasis_dg.trace(-s[0, 0], lambda p: p[1], ElementTriP1())
     tbasis_t, Lam_t = fbasis_dg.trace(s[0, 1], lambda p: p[1], ElementTriP1())
-                    
-                    
+
     # plotting
     from skfem.visuals.matplotlib import *
+    import matplotlib.pyplot as plt
     
     # stresses
-    ax = plot(basis_dg, s[0, 1], Nrefs=3, shading='gouraud')
+    ax = plot(basis_dg, s[0, 1], Nrefs=3, shading='gouraud', colorbar=True)
+
     mdefo = m.translated(x[basis.nodal_dofs])
-    draw(mdefo, ax=ax, c='w')
-    
+    draw(mdefo)
+
     # normal lagmult
     plot(tbasis_n, Lam_n, Nrefs=1, color='k.')
-    
+
     # tangential lagmult
     plot(tbasis_t, Lam_t, Nrefs=1, color='k.')
-        
+
 show()
-                    
+

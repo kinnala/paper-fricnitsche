@@ -1,7 +1,7 @@
 from skfem import *
 from skfem.models.elasticity import linear_elasticity,\
     lame_parameters, linear_stress
-from skfem.models.helpers import dot, ddot,\
+from skfem.helpers import dot, ddot,\
     prod, sym_grad
 import numpy as np
 from skfem.io import from_meshio

@@ -2,7 +2,7 @@ from skfem import *
 from skfem.models.elasticity import (linear_elasticity,
                                      lame_parameters,
                                      linear_stress)
-from skfem.models.helpers import dot, ddot, prod, sym_grad, grad
+from skfem.helpers import dot, ddot, prod, sym_grad, grad
 import numpy as np
 
 m = (MeshTri
