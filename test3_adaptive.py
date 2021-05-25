@@ -7,12 +7,14 @@ import numpy as np
 
 errprev = None
 
-for k in [1, 2, 3, 4, 5, 6]:
+m = (MeshTri
+     .init_sqsymmetric()
+     .refined(1)
+     .translated((0., -.5)))
 
-    m = (MeshTri
-         .init_sqsymmetric()
-         .refined(k)
-         .translated((0., -.5)))
+maxiters = 20
+
+for k in range(maxiters):
 
     e1 = ElementTriP2()
     e = ElementVector(e1)
@@ -29,7 +31,7 @@ for k in [1, 2, 3, 4, 5, 6]:
     weakform = linear_elasticity(Lambda, Mu)
     C = linear_stress(Lambda, Mu)
 
-    alpha = 1e-2
+    alpha = 1e-3
     kappa = 0.02
     alternative = False
 
@@ -106,8 +108,7 @@ for k in [1, 2, 3, 4, 5, 6]:
 
     xprev = basis.zeros()
 
-    maxciters = 100
-    for itr in range(maxciters):
+    for itr in range(40):
 
             B = asm(nitsche, fbasis, prev=fbasis.interpolate(xprev))
 
@@ -122,10 +123,8 @@ for k in [1, 2, 3, 4, 5, 6]:
             x = solve(*condense(K + B, f, D=D.all('u^1'), x=x))
 
             diff = np.linalg.norm(x - xprev)
-            if itr == maxciters - 1:
-                print("WARNING! contact iteration not terminating.")
             #print(diff)
-            if diff < 1e-9:
+            if diff < 1e-8:
                 break
             xprev = x.copy()
 
@@ -155,8 +154,8 @@ for k in [1, 2, 3, 4, 5, 6]:
             s[itr, jtr] = solve(asm(mass, basis_dg),
                                 asm(proj_cauchy, basis, basis_dg) @ x)
 
-    # off-plane component
-    s[2, 2] = 0. * (s[0, 0] + s[1, 1])
+            # off-plane component
+    s[2, 2] = nu * (s[0, 0] + s[1, 1])
 
     vonmises = np.sqrt(.5 * ((s[0, 0] - s[1, 1]) ** 2 +
                              (s[1, 1] - s[2, 2]) ** 2 +
@@ -169,18 +168,46 @@ for k in [1, 2, 3, 4, 5, 6]:
     # plotting
     from skfem.visuals.matplotlib import *
     import matplotlib.pyplot as plt
-    
-    # stresses
-    ax = plot(basis_dg, s[0, 1], Nrefs=3, shading='gouraud', colorbar=True)
 
-    mdefo = m.translated(x[basis.nodal_dofs])
-    draw(mdefo)
 
-    # normal lagmult
-    plot(tbasis_n, Lam_n, Nrefs=1, color='k.')
 
-    # tangential lagmult
-    plot(tbasis_t, Lam_t, Nrefs=1, color='k.')
+    # calculate error estimators
+
+    # interior residual
+
+    @Functional
+    def divsigma(w):
+        return w.h ** 2 * (w['s0'].grad[0] + w['s1'].grad[1]) ** 2
+
+    est1 = divsigma.elemental(basis_dg,
+                              s0=basis_dg.interpolate(s[0, 0]),
+                              s1=basis_dg.interpolate(s[0, 1]))
+    est2 = divsigma.elemental(basis_dg,
+                              s0=basis_dg.interpolate(s[1, 0]),
+                              s1=basis_dg.interpolate(s[1, 1]))
+
+    est = est1 + est2
+
+    # plots
+    if k == maxiters - 1 or len(x) > 8000:
+        # estimators
+        #plot(m, est1)
+
+        # stresses
+        ax = plot(basis_dg, s[0, 1], Nrefs=3, shading='gouraud', colorbar=True)
+
+        mdefo = m.translated(x[basis.nodal_dofs])
+        draw(mdefo)
+
+        # normal lagmult
+        plot(tbasis_n, Lam_n, Nrefs=1, color='k.')
+
+        # tangential lagmult
+        plot(tbasis_t, Lam_t, Nrefs=1, color='k.')
+
+        break
+
+    m = m.refined(adaptive_theta(est))
 
 show()
 
