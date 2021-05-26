@@ -7,7 +7,7 @@ import numpy as np
 
 errprev = None
 
-for k in [1, 2, 3, 4, 5, 6]:
+for k in [1, 2, 3, 4]:# 5, 6]:
 
     m = (MeshTri
          .init_sqsymmetric()
@@ -29,7 +29,7 @@ for k in [1, 2, 3, 4, 5, 6]:
     weakform = linear_elasticity(Lambda, Mu)
     C = linear_stress(Lambda, Mu)
 
-    alpha = 1e-2
+    alpha = 1e-3
     kappa = 0.02
     alternative = False
 
@@ -129,11 +129,7 @@ for k in [1, 2, 3, 4, 5, 6]:
                 break
             xprev = x.copy()
 
-    err = np.sqrt(Functional(lambda w: w['sol'].value[0] ** 2 + w['sol'].value[1] ** 2 + ddot(grad(w['sol']), grad(w['sol'])))
-                  .assemble(basis, sol=basis.interpolate(x)))
-    print("{},{},{},{}".format(m.param(), len(x), err, abs(err-errprev) if errprev is not None else "nan"))
 
-    errprev = err
 
     # calculate stress
     e_dg = ElementTriDG(ElementTriP1())
@@ -165,6 +161,64 @@ for k in [1, 2, 3, 4, 5, 6]:
 
     tbasis_n, Lam_n = fbasis_dg.trace(-s[0, 0], lambda p: p[1], ElementTriP1())
     tbasis_t, Lam_t = fbasis_dg.trace(s[0, 1], lambda p: p[1], ElementTriP1())
+
+
+    # calculate error estimators
+
+    # interior residual
+
+    @Functional
+    def divsigma(w):
+        return w.h ** 2 * (w['s0'].grad[0] + w['s1'].grad[1]) ** 2
+
+    est1 = divsigma.elemental(basis_dg,
+                              s0=basis_dg.interpolate(s[0, 0]),
+                              s1=basis_dg.interpolate(s[0, 1]))
+    est2 = divsigma.elemental(basis_dg,
+                              s0=basis_dg.interpolate(s[1, 0]),
+                              s1=basis_dg.interpolate(s[1, 1]))
+
+    eta_K = est1 + est2
+
+    ## interior edge jump estimator
+    def edge_estimator(m, s, ix):
+
+        fbasis = [
+            InteriorFacetBasis(m, e_dg, intorder=4, side=0),
+            InteriorFacetBasis(m, e_dg, intorder=4, side=1),
+        ]
+        ws = {
+            'plus0': fbasis[0].interpolate(s[ix, 0]),
+            'plus1': fbasis[0].interpolate(s[ix, 1]),
+            'minus0': fbasis[1].interpolate(s[ix, 0]),
+            'minus1': fbasis[1].interpolate(s[ix, 1]),
+        }
+
+        @Functional
+        def edge_jump(w):
+            h = w.h
+            n = w.n
+            return h * ((w['plus0'] - w['minus0']) * n[0]
+                        + (w['plus1'] - w['minus1']) * n[1]) ** 2
+
+        eta_E1 = edge_jump.elemental(fbasis[0], **ws)
+
+        tmp = np.zeros(m.facets.shape[1])
+        np.add.at(tmp, fbasis[0].find, eta_E1)
+        eta_E1 = np.sum(.5 * tmp[m.t2f], axis=0)
+
+        return eta_E1
+
+    eta_E  = edge_estimator(m, s, 0) + edge_estimator(m, s, 1)
+
+    est = eta_K + eta_E
+
+
+    err = np.sqrt(Functional(lambda w: w['sol'].value[0] ** 2 + w['sol'].value[1] ** 2 + ddot(grad(w['sol']), grad(w['sol'])))
+                  .assemble(basis, sol=basis.interpolate(x)))
+    print("{},{},{},{}".format(m.param(), len(x), err, np.sqrt(np.sum(est))))
+
+    errprev = err
 
     # plotting
     from skfem.visuals.matplotlib import *

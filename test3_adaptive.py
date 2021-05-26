@@ -10,7 +10,7 @@ m = (MeshTri
      .refined(1)
      .translated((0., -.5)))
 
-maxiters = 20
+maxiters = 50
 
 for k in range(maxiters):
 
@@ -162,8 +162,6 @@ for k in range(maxiters):
     from skfem.visuals.matplotlib import *
     import matplotlib.pyplot as plt
 
-
-
     # calculate error estimators
 
     # interior residual
@@ -219,7 +217,7 @@ for k in range(maxiters):
     print("{},{},{}".format(len(x), err, np.sqrt(np.sum(est))))
 
     # plots
-    if k == maxiters - 1 or len(x) > 8000:
+    if k == maxiters - 1 or len(x) > 7900:
         # estimators
         #plot(m, est1)
 
@@ -237,7 +235,7 @@ for k in range(maxiters):
 
         break
 
-    m = m.refined(adaptive_theta(est, theta=0.5))
+    m = m.refined(adaptive_theta(est, theta=0.05))
 
 show()
 
