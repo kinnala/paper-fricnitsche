@@ -5,8 +5,6 @@ from skfem.models.elasticity import (linear_elasticity,
 from skfem.helpers import dot, ddot, prod, sym_grad, grad
 import numpy as np
 
-errprev = None
-
 m = (MeshTri
      .init_sqsymmetric()
      .refined(1)
@@ -110,29 +108,24 @@ for k in range(maxiters):
 
     for itr in range(40):
 
-            B = asm(nitsche, fbasis, prev=fbasis.interpolate(xprev))
+        B = asm(nitsche, fbasis, prev=fbasis.interpolate(xprev))
 
-            f = asm(nitsche_load, fbasis, prev=fbasis.interpolate(xprev))
+        f = asm(nitsche_load, fbasis, prev=fbasis.interpolate(xprev))
 
-            D = basis.get_dofs(lambda x: x[0] == 0.0)
+        D = basis.get_dofs(lambda x: x[0] == 0.0)
 
-            x = np.zeros(K.shape[0])
-            x[D.nodal['u^1']] = 0.1
-            x[D.facet['u^1']] = 0.1
+        x = np.zeros(K.shape[0])
+        x[D.nodal['u^1']] = 0.1
+        x[D.facet['u^1']] = 0.1
 
-            x = solve(*condense(K + B, f, D=D.all('u^1'), x=x))
+        x = solve(*condense(K + B, f, D=D.all('u^1'), x=x))
 
-            diff = np.linalg.norm(x - xprev)
-            #print(diff)
-            if diff < 1e-8:
-                break
-            xprev = x.copy()
+        diff = np.linalg.norm(x - xprev)
 
-    err = np.sqrt(Functional(lambda w: w['sol'].value[0] ** 2 + w['sol'].value[1] ** 2 + ddot(grad(w['sol']), grad(w['sol'])))
-                  .assemble(basis, sol=basis.interpolate(x)))
-    print("{},{},{},{}".format(m.param(), len(x), err, abs(err-errprev) if errprev is not None else "nan"))
+        if diff < 1e-8:
+            break
+        xprev = x.copy()
 
-    errprev = err
 
     # calculate stress
     e_dg = ElementTriDG(ElementTriP1())
@@ -186,7 +179,44 @@ for k in range(maxiters):
                               s0=basis_dg.interpolate(s[1, 0]),
                               s1=basis_dg.interpolate(s[1, 1]))
 
-    est = est1 + est2
+    eta_K = est1 + est2
+
+    ## interior edge jump estimator
+    def edge_estimator(m, s, ix):
+
+        fbasis = [
+            InteriorFacetBasis(m, e_dg, intorder=4, side=0),
+            InteriorFacetBasis(m, e_dg, intorder=4, side=1),
+        ]
+        ws = {
+            'plus0': fbasis[0].interpolate(s[ix, 0]),
+            'plus1': fbasis[0].interpolate(s[ix, 1]),
+            'minus0': fbasis[1].interpolate(s[ix, 0]),
+            'minus1': fbasis[1].interpolate(s[ix, 1]),
+        }
+
+        @Functional
+        def edge_jump(w):
+            h = w.h
+            n = w.n
+            return h * ((w['plus0'] - w['minus0']) * n[0]
+                        + (w['plus1'] - w['minus1']) * n[1]) ** 2
+
+        eta_E1 = edge_jump.elemental(fbasis[0], **ws)
+
+        tmp = np.zeros(m.facets.shape[1])
+        np.add.at(tmp, fbasis[0].find, eta_E1)
+        eta_E1 = np.sum(.5 * tmp[m.t2f], axis=0)
+
+        return eta_E1
+
+    eta_E  = edge_estimator(m, s, 0) + edge_estimator(m, s, 1)
+
+    est = eta_K + eta_E
+
+    err = np.sqrt(Functional(lambda w: w['sol'].value[0] ** 2 + w['sol'].value[1] ** 2 + ddot(grad(w['sol']), grad(w['sol'])))
+                  .assemble(basis, sol=basis.interpolate(x)))
+    print("{},{},{}".format(len(x), err, np.sqrt(np.sum(est))))
 
     # plots
     if k == maxiters - 1 or len(x) > 8000:
@@ -207,7 +237,7 @@ for k in range(maxiters):
 
         break
 
-    m = m.refined(adaptive_theta(est))
+    m = m.refined(adaptive_theta(est, theta=0.5))
 
 show()
 
