@@ -280,6 +280,7 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
         lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
         import matplotlib.pyplot as plt
         ix = np.argsort(w.x[1].flatten())
+        ## NOTE! enable to draw lagmult
         #plt.figure()
         #plt.plot(w.x[1].flatten()[ix], lambdan.flatten()[ix])
         #plt.figure()

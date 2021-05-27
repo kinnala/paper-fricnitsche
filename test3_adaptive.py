@@ -15,7 +15,7 @@ maxiters = 50
 kappa = 0.02
 
 def indicator(lambdat):
-    return np.abs(lambdat).max(axis=1) < kappa
+    return np.abs(lambdat).mean(axis=1) < kappa
 
 for k in range(maxiters):
 
@@ -249,8 +249,9 @@ for k in range(maxiters):
         nxt = prod(w.n, t)
         lambdan = 1. / (alpha * w.h) * dot(w['sol'], n) - ddot(nxn, C(sym_grad(w['sol'])))
         gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
-        ind = indicator(gammat)
-        lambdat = gammat * ind[:, None] - kappa * np.sign(w.x[1]) * (~ind[:, None])
+        #ind = indicator(gammat)
+        #lambdat = gammat * ind[:, None] - kappa * np.sign(w.x[1]) * (~ind[:, None])
+        lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
         sun = ddot(nxn, C(sym_grad(w['sol'])))
         sut = ddot(nxt, C(sym_grad(w['sol'])))
         return (1. / h * (w['sol'].value[0] * (w['sol'].value[0] > 0)) ** 2
@@ -277,10 +278,12 @@ for k in range(maxiters):
         gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
         sun = -ddot(nxn, C(sym_grad(w['sol'])))
         sut = -ddot(nxt, C(sym_grad(w['sol'])))
-        ind = indicator(gammat)
-        lambdat = gammat * ind[:, None] - kappa * np.sign(w.x[1]) * (~ind[:, None])
+        #ind = indicator(gammat)
+        #lambdat = gammat * ind[:, None] - kappa * np.sign(w.x[1]) * (~ind[:, None])
+        lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
         import matplotlib.pyplot as plt
         ix = np.argsort(w.x[1].flatten())
+        ## NOTE! enable to draw lagmult
         #plt.figure()
         #plt.plot(w.x[1].flatten()[ix], lambdan.flatten()[ix])
         #plt.figure()
@@ -300,7 +303,7 @@ for k in range(maxiters):
     print("{},{},{}".format(len(x), err, np.sqrt(np.sum(est))))
 
     # plots
-    if k == maxiters - 1 or len(x) > 5000:
+    if k == maxiters - 1 or len(x) > 7600:
         # estimators
         #plot(m, est1)
 
@@ -323,7 +326,10 @@ for k in range(maxiters):
 
         break
 
-    m = m.refined(adaptive_theta(est, theta=0.5))
+    #mdefo = m.translated(x[basis.nodal_dofs])
+    #draw(mdefo)
+
+    m = m.refined(adaptive_theta(est, theta=0.3))
 
 #show()
 
