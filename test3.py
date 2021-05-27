@@ -7,7 +7,7 @@ import numpy as np
 
 errprev = None
 
-for k in [1, 2, 3, 4]:# 5, 6]:
+for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
 
     m = (MeshTri
          .init_sqsymmetric()
@@ -211,7 +211,56 @@ for k in [1, 2, 3, 4]:# 5, 6]:
 
     eta_E  = edge_estimator(m, s, 0) + edge_estimator(m, s, 1)
 
-    est = eta_K + eta_E
+    ## neumann estimator
+    def neumann_estimator(m, s, ind):
+
+        fbasis = FacetBasis(m, e_dg, facets=m.facets_satisfying(ind))
+        s1 = [fbasis.interpolate(s[0, i]) for i in [0, 1]]
+        s2 = [fbasis.interpolate(s[1, i]) for i in [0, 1]]
+
+        @Functional
+        def traction_zero(w):
+            h = w.h
+            n = w.n
+            si1, si2 = w.w
+            return h * (si1 * n[0] + si2 * n[1]) ** 2
+
+        eta_neumann = (traction_zero.elemental(fbasis, w=s1)
+                       + traction_zero.elemental(fbasis, w=s2))
+
+        tmp = np.zeros(m.facets.shape[1])
+        np.add.at(tmp, fbasis.find, eta_neumann)
+        return np.sum(.5 * tmp[m.t2f], axis=0)
+
+    eta_N = neumann_estimator(m, s, lambda x: np.abs(x[1]) == 0.5)
+
+    ## contact estimator
+    @Functional
+    def contact_estimator(w):
+        h = w.h
+        n = w.n.copy()
+        t = w.n.copy()
+        t[0] = w.n[1]
+        t[1] = -w.n[0]
+        nxn = prod(w.n, w.n)
+        nxt = prod(w.n, t)
+        lambdan = 1. / (alpha * w.h) * dot(w['sol'], n) - ddot(nxn, C(sym_grad(w['sol'])))
+        gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
+        lambdat = gammat * (np.abs(gammat) < kappa) + kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
+        sun = ddot(nxn, C(sym_grad(w['sol'])))
+        sut = ddot(nxt, C(sym_grad(w['sol'])))
+        return (1. / h * (w['sol'].value[0] * (w['sol'].value[0] > 0)) ** 2
+                + h * (lambdat + sut) ** 2
+                + h * (lambdan + sun) ** 2)
+
+    fbasis_G = FacetBasis(m, e, facets=m.facets_satisfying(lambda x: x[0] == 1.))
+    eta_G = contact_estimator.elemental(fbasis_G, sol=fbasis_G.interpolate(x))
+    tmp = np.zeros(m.facets.shape[1])
+    np.add.at(tmp, fbasis_G.find, eta_G)
+    eta_G = np.sum(.5 * tmp[m.t2f], axis=0)
+
+    ## total estimator
+    est = eta_K + eta_E + eta_N + eta_G
 
 
     err = np.sqrt(Functional(lambda w: w['sol'].value[0] ** 2 + w['sol'].value[1] ** 2 + ddot(grad(w['sol']), grad(w['sol'])))
@@ -236,5 +285,5 @@ for k in [1, 2, 3, 4]:# 5, 6]:
     # tangential lagmult
     plot(tbasis_t, Lam_t, Nrefs=1, color='k.')
 
-show()
+#show()
 

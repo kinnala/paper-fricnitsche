@@ -67,12 +67,9 @@ for k in range(maxiters):
 
 
         normal = (1. / (alpha * w.h) * un * vn - sun * vn - svn * un + alpha * w.h * sun * svn)
-        if alternative:
-            lambdat = 1. / (alpha) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
-            tangent = (1. / (alpha) * ut * vt - sut * vt - svt * ut + alpha * sut * svt) * (np.abs(lambdat) < kappa)
-        else:
-            lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
-            tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut + alpha * w.h * sut * svt) * (np.abs(lambdat) < kappa)
+
+        lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
+        tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut + alpha * w.h * sut * svt) * (np.abs(lambdat) < kappa)
 
         return normal + tangent
 
@@ -97,10 +94,7 @@ for k in range(maxiters):
 
         skappa = kappa * np.sign(y)
 
-        if alternative:
-            lambdat = 1. / (alpha) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
-        else:
-            lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
+        lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
 
         return skappa * vt * (np.abs(lambdat) >= kappa)
 
@@ -210,7 +204,56 @@ for k in range(maxiters):
 
     eta_E  = edge_estimator(m, s, 0) + edge_estimator(m, s, 1)
 
-    est = eta_K + eta_E
+    ## neumann estimator
+    def neumann_estimator(m, s, ind):
+
+        fbasis = FacetBasis(m, e_dg, facets=m.facets_satisfying(ind))
+        s1 = [fbasis.interpolate(s[0, i]) for i in [0, 1]]
+        s2 = [fbasis.interpolate(s[1, i]) for i in [0, 1]]
+
+        @Functional
+        def traction_zero(w):
+            h = w.h
+            n = w.n
+            si1, si2 = w.w
+            return h * (si1 * n[0] + si2 * n[1]) ** 2
+
+        eta_neumann = (traction_zero.elemental(fbasis, w=s1)
+                       + traction_zero.elemental(fbasis, w=s2))
+
+        tmp = np.zeros(m.facets.shape[1])
+        np.add.at(tmp, fbasis.find, eta_neumann)
+        return np.sum(.5 * tmp[m.t2f], axis=0)
+
+    eta_N = neumann_estimator(m, s, lambda x: np.abs(x[1]) == 0.5)
+
+    ## contact estimator
+    @Functional
+    def contact_estimator(w):
+        h = w.h
+        n = w.n.copy()
+        t = w.n.copy()
+        t[0] = w.n[1]
+        t[1] = -w.n[0]
+        nxn = prod(w.n, w.n)
+        nxt = prod(w.n, t)
+        lambdan = 1. / (alpha * w.h) * dot(w['sol'], n) - ddot(nxn, C(sym_grad(w['sol'])))
+        gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
+        lambdat = gammat * (np.abs(gammat) < kappa) + kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
+        sun = ddot(nxn, C(sym_grad(w['sol'])))
+        sut = ddot(nxt, C(sym_grad(w['sol'])))
+        return (1. / h * (w['sol'].value[0] * (w['sol'].value[0] > 0)) ** 2
+                + h * (lambdat + sut) ** 2
+                + h * (lambdan + sun) ** 2)
+
+    fbasis_G = FacetBasis(m, e, facets=m.facets_satisfying(lambda x: x[0] == 1.))
+    eta_G = contact_estimator.elemental(fbasis_G, sol=fbasis_G.interpolate(x))
+    tmp = np.zeros(m.facets.shape[1])
+    np.add.at(tmp, fbasis_G.find, eta_G)
+    eta_G = np.sum(.5 * tmp[m.t2f], axis=0)
+
+    ## total estimator
+    est = eta_K + eta_E + eta_N + eta_G
 
     err = np.sqrt(Functional(lambda w: w['sol'].value[0] ** 2 + w['sol'].value[1] ** 2 + ddot(grad(w['sol']), grad(w['sol'])))
                   .assemble(basis, sol=basis.interpolate(x)))
@@ -227,6 +270,11 @@ for k in range(maxiters):
         mdefo = m.translated(x[basis.nodal_dofs])
         draw(mdefo)
 
+        # displacement
+        pbasis = InteriorBasis(m, ElementTriP2())
+        ix2 = np.concatenate((basis.nodal_dofs[1], basis.facet_dofs[1]))
+        plot(pbasis, x[ix2], Nrefs=2, shading='gouraud', colorbar=True)
+
         # normal lagmult
         plot(tbasis_n, Lam_n, Nrefs=1, color='k.')
 
@@ -235,7 +283,7 @@ for k in range(maxiters):
 
         break
 
-    m = m.refined(adaptive_theta(est, theta=0.05))
+    m = m.refined(adaptive_theta(est, theta=0.5))
 
-show()
+#show()
 
