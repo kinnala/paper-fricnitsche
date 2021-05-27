@@ -239,7 +239,7 @@ for k in range(maxiters):
         nxt = prod(w.n, t)
         lambdan = 1. / (alpha * w.h) * dot(w['sol'], n) - ddot(nxn, C(sym_grad(w['sol'])))
         gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
-        lambdat = gammat * (np.abs(gammat) < kappa) + kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
+        lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
         sun = ddot(nxn, C(sym_grad(w['sol'])))
         sut = ddot(nxt, C(sym_grad(w['sol'])))
         return (1. / h * (w['sol'].value[0] * (w['sol'].value[0] > 0)) ** 2
@@ -252,6 +252,28 @@ for k in range(maxiters):
     np.add.at(tmp, fbasis_G.find, eta_G)
     eta_G = np.sum(.5 * tmp[m.t2f], axis=0)
 
+    ## lambda plot
+    @Functional
+    def lambdat(w):
+        h = w.h
+        n = w.n.copy()
+        t = w.n.copy()
+        t[0] = w.n[1]
+        t[1] = -w.n[0]
+        nxn = prod(w.n, w.n)
+        nxt = prod(w.n, t)
+        lambdan = 1. / (alpha * w.h) * dot(w['sol'], n) - ddot(nxn, C(sym_grad(w['sol'])))
+        gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
+        lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
+        import matplotlib.pyplot as plt
+        ix = np.argsort(w.x[1].flatten())
+        #plt.plot(w.x[1].flatten()[ix], lambdat.flatten()[ix])
+        #plt.show()
+        return 0 * lambdat
+
+    fbasis_lambda = FacetBasis(m, e, facets=m.facets_satisfying(lambda x: x[0] == 1.))
+    lambdat = lambdat.assemble(fbasis_lambda, sol=fbasis_lambda.interpolate(x))
+
     ## total estimator
     est = eta_K + eta_E + eta_N + eta_G
 
@@ -260,7 +282,7 @@ for k in range(maxiters):
     print("{},{},{}".format(len(x), err, np.sqrt(np.sum(est))))
 
     # plots
-    if k == maxiters - 1 or len(x) > 7900:
+    if k == maxiters - 1 or len(x) > 5000:
         # estimators
         #plot(m, est1)
 
@@ -285,5 +307,5 @@ for k in range(maxiters):
 
     m = m.refined(adaptive_theta(est, theta=0.5))
 
-#show()
+show()
 

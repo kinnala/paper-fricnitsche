@@ -246,7 +246,7 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
         nxt = prod(w.n, t)
         lambdan = 1. / (alpha * w.h) * dot(w['sol'], n) - ddot(nxn, C(sym_grad(w['sol'])))
         gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
-        lambdat = gammat * (np.abs(gammat) < kappa) + kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
+        lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
         sun = ddot(nxn, C(sym_grad(w['sol'])))
         sut = ddot(nxt, C(sym_grad(w['sol'])))
         return (1. / h * (w['sol'].value[0] * (w['sol'].value[0] > 0)) ** 2
