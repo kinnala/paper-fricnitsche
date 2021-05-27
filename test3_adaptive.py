@@ -325,5 +325,5 @@ for k in range(maxiters):
 
     m = m.refined(adaptive_theta(est, theta=0.5))
 
-show()
+#show()
 
