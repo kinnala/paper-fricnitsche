@@ -7,7 +7,12 @@ import numpy as np
 
 errprev = None
 
-for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
+kappa = 0.02
+
+def indicator(lambdat):
+    return np.abs(lambdat).max(axis=1) < kappa
+
+for k in [1, 2, 3, 4, 5]:# 5, 6]:
 
     m = (MeshTri
          .init_sqsymmetric()
@@ -30,7 +35,6 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
     C = linear_stress(Lambda, Mu)
 
     alpha = 1e-3
-    kappa = 0.02
     alternative = False
 
     K = asm(weakform, basis)
@@ -67,12 +71,9 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
 
 
         normal = (1. / (alpha * w.h) * un * vn - sun * vn - svn * un + alpha * w.h * sun * svn)
-        if alternative:
-            lambdat = 1. / (alpha) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
-            tangent = (1. / (alpha) * ut * vt - sut * vt - svt * ut + alpha * sut * svt) * (np.abs(lambdat) < kappa)
-        else:
-            lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
-            tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut + alpha * w.h * sut * svt) * (np.abs(lambdat) < kappa)
+        lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
+        ind = indicator(lambdat)
+        tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut + alpha * w.h * sut * svt) * ind[:, None]
 
         return normal + tangent
 
@@ -97,12 +98,11 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
 
         skappa = kappa * np.sign(y)
 
-        if alternative:
-            lambdat = 1. / (alpha) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
-        else:
-            lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
+        lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
 
-        return skappa * vt * (np.abs(lambdat) >= kappa)
+        ind = ~indicator(lambdat)
+
+        return skappa * vt * ind[:, None]
 
     xprev = basis.zeros()
 
@@ -246,7 +246,9 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
         nxt = prod(w.n, t)
         lambdan = 1. / (alpha * w.h) * dot(w['sol'], n) - ddot(nxn, C(sym_grad(w['sol'])))
         gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
-        lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
+        #lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
+        ind = indicator(gammat)
+        lambdat = gammat * ind[:, None] - kappa * np.sign(w.x[1]) * (~ind[:, None])
         sun = ddot(nxn, C(sym_grad(w['sol'])))
         sut = ddot(nxt, C(sym_grad(w['sol'])))
         return (1. / h * (w['sol'].value[0] * (w['sol'].value[0] > 0)) ** 2
@@ -258,6 +260,35 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
     tmp = np.zeros(m.facets.shape[1])
     np.add.at(tmp, fbasis_G.find, eta_G)
     eta_G = np.sum(.5 * tmp[m.t2f], axis=0)
+
+    ## lambda plot
+    @Functional
+    def lambdat(w):
+        h = w.h
+        n = w.n.copy()
+        t = w.n.copy()
+        t[0] = w.n[1]
+        t[1] = -w.n[0]
+        nxn = prod(w.n, w.n)
+        nxt = prod(w.n, t)
+        lambdan = 1. / (alpha * w.h) * dot(w['sol'], n) - ddot(nxn, C(sym_grad(w['sol'])))
+        gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
+        sun = -ddot(nxn, C(sym_grad(w['sol'])))
+        sut = -ddot(nxt, C(sym_grad(w['sol'])))
+        ind = indicator(gammat)
+        lambdat = gammat * ind[:, None] - kappa * np.sign(w.x[1]) * (~ind[:, None])
+        import matplotlib.pyplot as plt
+        ix = np.argsort(w.x[1].flatten())
+        plt.figure()
+        plt.plot(w.x[1].flatten()[ix], lambdan.flatten()[ix])
+        plt.figure()
+        plt.plot(w.x[1].flatten()[ix], lambdat.flatten()[ix])
+        plt.show()
+        return lambdat
+
+    fix = m.facets_satisfying(lambda x: x[0] == 1.)
+    fbasis_lambda = FacetBasis(m, e, facets=fix)
+    lambdat = lambdat.elemental(fbasis_lambda, sol=fbasis_lambda.interpolate(x))
 
     ## total estimator
     est = eta_K + eta_E + eta_N + eta_G
@@ -285,5 +316,5 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
     # tangential lagmult
     plot(tbasis_t, Lam_t, Nrefs=1, color='k.')
 
-#show()
+show()
 
