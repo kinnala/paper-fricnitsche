@@ -42,7 +42,7 @@ for k in range(maxiters):
 
     def gap(x):
         """Initial gap between the bodies."""
-        return 0.0 * x[0]
+        return -0.1 + 0.0 * x[0]
 
     @BilinearForm
     def nitsche(u, v, w):
@@ -106,7 +106,7 @@ for k in range(maxiters):
         ind = ~indicator(lambdat)
 
         #return skappa * vt * (np.abs(lambdat) >= kappa)
-        return skappa * vt * ind[:, None]
+        return skappa * vt * ind[:, None] + (1. / (alpha * w.h) * gap(w.x) * vn - svn * gap(w.x))
 
     xprev = basis.zeros()
 
@@ -114,19 +114,20 @@ for k in range(maxiters):
 
         B = asm(nitsche, fbasis, prev=fbasis.interpolate(xprev))
 
-        f = asm(nitsche_load, fbasis, prev=fbasis.interpolate(xprev))
+        g = asm(nitsche_load, fbasis, prev=fbasis.interpolate(xprev))
 
         D = basis.get_dofs(lambda x: x[0] == 0.0)
 
         x = np.zeros(K.shape[0])
-        x[D.nodal['u^1']] = 0.1
-        x[D.facet['u^1']] = 0.1
+        #x[D.nodal['u^1']] = 0.1
+        #x[D.facet['u^1']] = 0.1
 
-        x = solve(*condense(K + B, f, D=D.all('u^1'), x=x))
+        #x = solve(*condense(K + B, g, D=D.all('u^1'), x=x))
+        x = solve(*condense(K + B, g, D=D.all(), x=x))
 
         diff = np.linalg.norm(x - xprev)
 
-        if diff < 1e-8:
+        if diff < 1e-10:
             break
         xprev = x.copy()
 
@@ -247,14 +248,14 @@ for k in range(maxiters):
         t[1] = -w.n[0]
         nxn = prod(w.n, w.n)
         nxt = prod(w.n, t)
-        lambdan = 1. / (alpha * w.h) * dot(w['sol'], n) - ddot(nxn, C(sym_grad(w['sol'])))
+        lambdan = 1. / (alpha * w.h) * (dot(w['sol'], n) - gap(w.x)) - ddot(nxn, C(sym_grad(w['sol'])))
         gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
         #ind = indicator(gammat)
         #lambdat = gammat * ind[:, None] - kappa * np.sign(w.x[1]) * (~ind[:, None])
         lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
         sun = ddot(nxn, C(sym_grad(w['sol'])))
         sut = ddot(nxt, C(sym_grad(w['sol'])))
-        return (1. / h * (w['sol'].value[0] * (w['sol'].value[0] > 0)) ** 2
+        return (1. / h * ((w['sol'].value[0] - gap(w.x)) * (w['sol'].value[0] - gap(w.x) > 0)) ** 2
                 + h * (lambdat + sut) ** 2
                 + h * (lambdan + sun) ** 2)
 
@@ -274,7 +275,7 @@ for k in range(maxiters):
         t[1] = -w.n[0]
         nxn = prod(w.n, w.n)
         nxt = prod(w.n, t)
-        lambdan = 1. / (alpha * w.h) * dot(w['sol'], n) - ddot(nxn, C(sym_grad(w['sol'])))
+        lambdan = 1. / (alpha * w.h) * (dot(w['sol'], n) - gap(w.x)) - ddot(nxn, C(sym_grad(w['sol'])))
         gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
         sun = -ddot(nxn, C(sym_grad(w['sol'])))
         sut = -ddot(nxt, C(sym_grad(w['sol'])))
@@ -284,11 +285,15 @@ for k in range(maxiters):
         import matplotlib.pyplot as plt
         ix = np.argsort(w.x[1].flatten())
         ## NOTE! enable to draw lagmult
-        #plt.figure()
-        #plt.plot(w.x[1].flatten()[ix], lambdan.flatten()[ix])
-        #plt.figure()
-        #plt.plot(w.x[1].flatten()[ix], lambdat.flatten()[ix])
-        #plt.show()
+        plt.figure()
+        plt.plot(w.x[1].flatten()[ix], lambdan.flatten()[ix], 'k')
+        plt.ylabel('$\lambda_n$')
+        plt.xlabel('$y$')
+        plt.figure()
+        plt.plot(w.x[1].flatten()[ix], lambdat.flatten()[ix], 'k')
+        plt.ylabel('$\lambda_t$')
+        plt.xlabel('$y$')
+        plt.show()
         return lambdat
 
     fix = m.facets_satisfying(lambda x: x[0] == 1.)
@@ -329,7 +334,7 @@ for k in range(maxiters):
     #mdefo = m.translated(x[basis.nodal_dofs])
     #draw(mdefo)
 
-    m = m.refined(adaptive_theta(est, theta=0.3))
+    m = m.refined(adaptive_theta(est, theta=0.7))
 
-#show()
+show()
 
