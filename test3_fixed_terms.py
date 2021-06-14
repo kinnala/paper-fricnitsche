@@ -102,7 +102,7 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
 
         ind = ~indicator(lambdat)
 
-        return skappa * vt * ind[:, None] + (1. / (alpha * w.h) * gap(w.x) * vn - svn * gap(w.x))
+        return skappa * vt * ind[:, None] - skappa * w.h * alpha * svn * ind[:, None] + (1. / (alpha * w.h) * gap(w.x) * vn - svn * gap(w.x))
 
     xprev = basis.zeros()
 
