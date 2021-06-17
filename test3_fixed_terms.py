@@ -251,7 +251,7 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
         lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
         sun = ddot(nxn, C(sym_grad(w['sol'])))
         sut = ddot(nxt, C(sym_grad(w['sol'])))
-        return (1. / h * ((w['sol'].value[0] - gap(w.x)) * (w['sol'].value[0] - gap(w.x) > 0)) ** 2
+        return (0. * 1. / h * ((w['sol'].value[0] - gap(w.x)) * (w['sol'].value[0] - gap(w.x) > 0)) ** 2
                 + h * (lambdat + sut) ** 2
                 + h * (lambdan + sun) ** 2)
 
@@ -285,11 +285,12 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
         plt.plot(w.x[1].flatten()[ix], lambdan.flatten()[ix], 'k')
         plt.ylabel('$\lambda_n$')
         plt.xlabel('$y$')
+        plt.savefig('test3_uniform_lambdan_{}.pdf'.format(k))
         plt.figure()
         plt.plot(w.x[1].flatten()[ix], lambdat.flatten()[ix], 'k')
         plt.ylabel('$\lambda_t$')
         plt.xlabel('$y$')
-        plt.show()
+        plt.savefig('test3_uniform_lambdat_{}.pdf'.format(k))
         return lambdat
 
     fix = m.facets_satisfying(lambda x: x[0] == 1.)
@@ -312,15 +313,19 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
     
     # stresses
     ax = plot(basis_dg, s[0, 1], Nrefs=3, shading='gouraud', colorbar=True)
+    plt.savefig('test3_uniform_s01_{}.pdf'.format(k))
 
     mdefo = m.translated(x[basis.nodal_dofs])
     draw(mdefo)
+    plt.savefig('test3_uniform_defo_{}.pdf'.format(k))
 
     # normal lagmult
     plot(tbasis_n, Lam_n, Nrefs=1, color='k.')
+    plt.savefig('test3_uniform_sigmann_{}.pdf'.format(k))
 
     # tangential lagmult
     plot(tbasis_t, Lam_t, Nrefs=1, color='k.')
+    plt.savefig('test3_uniform_sigmant_{}.pdf'.format(k))
 
-show()
+#show()
 

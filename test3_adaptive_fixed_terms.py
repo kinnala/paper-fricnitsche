@@ -291,11 +291,12 @@ for k in range(maxiters):
         plt.plot(w.x[1].flatten()[ix], lambdan.flatten()[ix], 'k')
         plt.ylabel('$\lambda_n$')
         plt.xlabel('$y$')
+        plt.savefig('test3_adaptive_lambdan_{}.pdf'.format(k))
         plt.figure()
         plt.plot(w.x[1].flatten()[ix], lambdat.flatten()[ix], 'k')
         plt.ylabel('$\lambda_t$')
         plt.xlabel('$y$')
-        plt.show()
+        plt.savefig('test3_adaptive_lambdat_{}.pdf'.format(k))
         return lambdat
 
     fix = m.facets_satisfying(lambda x: x[0] == 1.)
@@ -316,20 +317,25 @@ for k in range(maxiters):
 
         # stresses
         ax = plot(basis_dg, s[0, 1], Nrefs=3, shading='gouraud', colorbar=True)
+        plt.savefig('test3_adaptive_s01_{}.pdf'.format(k))
 
         mdefo = m.translated(x[basis.nodal_dofs])
         draw(mdefo)
+        plt.savefig('test3_adaptive_defo_{}.pdf'.format(k))
 
         # displacement
         pbasis = InteriorBasis(m, ElementTriP2())
         ix2 = np.concatenate((basis.nodal_dofs[1], basis.facet_dofs[1]))
         plot(pbasis, x[ix2], Nrefs=2, shading='gouraud', colorbar=True)
+        plt.savefig('test3_adaptive_disp_{}.pdf'.format(k))
 
         # normal lagmult
         plot(tbasis_n, Lam_n, Nrefs=1, color='k.')
+        plt.savefig('test3_adaptive_sigmann_{}.pdf'.format(k))
 
         # tangential lagmult
         plot(tbasis_t, Lam_t, Nrefs=1, color='k.')
+        plt.savefig('test3_adaptive_sigmant_{}.pdf'.format(k))
 
         break
 
@@ -338,5 +344,5 @@ for k in range(maxiters):
 
     m = m.refined(adaptive_theta(est, theta=0.7))
 
-show()
+#show()
 
