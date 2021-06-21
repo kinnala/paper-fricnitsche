@@ -6,6 +6,6 @@
             "name": "Tom Gustafsson"
         }
     ],
-
+    "title": "kinnala/paper-fricnitsche",
     "description": "A numerical experiment for the paper 'Stabilized finite elements for Tresca friction problem'."
 }
