@@ -1,7 +1,7 @@
 * Numerical experiment: Nitsche's method for Tresca contact
 
 This repository contains source code for reproducing the numerical experiment
-from the article "Adaptive finite elements for Tresca friction problem" by Tom
+from the article "Stabilized finite elements for Tresca friction problem" by Tom
 Gustafsson and Juha Videman.
 
 ** General information
