@@ -4,6 +4,8 @@ from skfem.models.elasticity import (linear_elasticity,
                                      linear_stress)
 from skfem.helpers import dot, ddot, prod, sym_grad, grad
 import numpy as np
+from matplotlib import rcParams
+rcParams.update({'figure.autolayout': True})
 
 errprev = None
 
@@ -286,14 +288,14 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
         import matplotlib.pyplot as plt
         ix = np.argsort(w.x[1].flatten())
         ## NOTE! enable to draw lagmult
-        plt.figure()
+        plt.figure(figsize=(4, 3))
         plt.plot(w.x[1].flatten()[ix], lambdan.flatten()[ix], 'k')
         plt.ylabel('$\lambda_n$')
         plt.xlabel('$y$')
         plt.savefig('test3_uniform_lambdan_{}.pdf'.format(k))
         plt.close()
 
-        plt.figure()
+        plt.figure(figsize=(4, 3))
         plt.plot(w.x[1].flatten()[ix], lambdat.flatten()[ix], 'k')
         plt.ylabel('$\lambda_t$')
         plt.xlabel('$y$')
@@ -301,7 +303,7 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
         plt.close()
 
         # draw u_t
-        plt.figure(figsize=(8, 6))
+        plt.figure(figsize=(4, 3))
         plt.plot(w.x[1].flatten()[ix], dot(w['sol'], t).flatten()[ix], 'k')
         plt.ylabel('$u_t$')
         plt.xlabel('$y$')
@@ -309,7 +311,7 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
         plt.close()
 
         # draw u_n
-        plt.figure()
+        plt.figure(figsize=(4, 3))
         plt.plot(w.x[1].flatten()[ix], dot(w['sol'], n).flatten()[ix], 'k')
         plt.ylabel('$u_n$')
         plt.xlabel('$y$')
