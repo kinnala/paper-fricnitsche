@@ -298,12 +298,31 @@ for k in range(maxiters):
         plt.xlabel('$y$')
         plt.savefig('test3_adaptive_lambdan_{}.pdf'.format(k))
         plt.close()
+
         plt.figure()
         plt.plot(w.x[1].flatten()[ix], lambdat.flatten()[ix], 'k')
         plt.ylabel('$\lambda_t$')
         plt.xlabel('$y$')
         plt.savefig('test3_adaptive_lambdat_{}.pdf'.format(k))
         plt.close()
+
+        # draw u_t
+        plt.figure(figsize=(8, 6))
+        plt.plot(w.x[1].flatten()[ix], dot(w['sol'], t).flatten()[ix], 'k')
+        plt.ylabel('$u_t$')
+        plt.xlabel('$y$')
+        plt.savefig('test3_uniform_ut_{}.pdf'.format(k))
+        plt.close()
+
+        # draw u_n
+        plt.figure()
+        plt.plot(w.x[1].flatten()[ix], dot(w['sol'], n).flatten()[ix], 'k')
+        plt.ylabel('$u_n$')
+        plt.xlabel('$y$')
+        plt.ylim([-0.125, -0.075])
+        plt.savefig('test3_uniform_un_{}.pdf'.format(k))
+        plt.close()
+
         return lambdat
 
     fix = m.facets_satisfying(lambda x: x[0] == 1.)
