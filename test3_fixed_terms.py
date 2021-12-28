@@ -12,6 +12,8 @@ kappa = 0.02
 def indicator(lambdat):
     return np.abs(lambdat).mean(axis=1) < kappa
 
+alldiffs = {}
+
 for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
 
     m = (MeshTri
@@ -107,6 +109,7 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
     xprev = basis.zeros()
 
     maxciters = 100
+    diffs = []
     for itr in range(maxciters):
 
             B = asm(nitsche, fbasis, prev=fbasis.interpolate(xprev))
@@ -122,6 +125,7 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
             x = solve(*condense(K + B, f, D=D.all(), x=x))
 
             diff = np.linalg.norm(x - xprev)
+            diffs.append(diff)
             if itr == maxciters - 1:
                 print("WARNING! contact iteration not terminating.")
             #print(diff)
@@ -129,7 +133,7 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
                 break
             xprev = x.copy()
 
-
+    alldiffs[len(xprev)] = diffs
 
     # calculate stress
     e_dg = ElementTriDG(ElementTriP1())
@@ -334,5 +338,18 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
     plt.savefig('test3_uniform_sigmant_{}.pdf'.format(k))
     plt.close()
 
+NUM_COLORS = 6
+cm = plt.get_cmap('gist_rainbow')
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.set_prop_cycle(color=[cm(1.*i/NUM_COLORS) for i in range(NUM_COLORS)])
+for k in alldiffs:
+    plt.semilogy(np.array(alldiffs[k]))
+legend = list('$N = {}$'.format(k) for k in alldiffs)
+plt.xlabel('Contact iteration')
+plt.ylabel('Norm of the difference')
+plt.legend(legend)
+plt.savefig('test3_uniform_contact_convergence.pdf')
+plt.close()
 #show()
 

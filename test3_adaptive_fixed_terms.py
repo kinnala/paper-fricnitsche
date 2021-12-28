@@ -17,6 +17,8 @@ kappa = 0.02
 def indicator(lambdat):
     return np.abs(lambdat).mean(axis=1) < kappa
 
+alldiffs = {}
+
 for k in range(maxiters):
 
     e1 = ElementTriP2()
@@ -111,7 +113,7 @@ for k in range(maxiters):
         return skappa * vt * ind[:, None] - skappa * w.h * alpha * svn * ind[:, None] + (1. / (alpha * w.h) * gap(w.x) * vn - svn * gap(w.x))
 
     xprev = basis.zeros()
-
+    diffs = []
     for itr in range(40):
 
         B = asm(nitsche, fbasis, prev=fbasis.interpolate(xprev))
@@ -128,10 +130,12 @@ for k in range(maxiters):
         x = solve(*condense(K + B, g, D=D.all(), x=x))
 
         diff = np.linalg.norm(x - xprev)
-
+        diffs.append(diff)
         if diff < 1e-10:
             break
         xprev = x.copy()
+
+    alldiffs[len(xprev)] = diffs
 
 
     # calculate stress
@@ -352,5 +356,18 @@ for k in range(maxiters):
 
     m = m.refined(adaptive_theta(est, theta=0.7))
 
+NUM_COLORS = 21
+cm = plt.get_cmap('gist_rainbow')
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.set_prop_cycle(color=[cm(1.*i/NUM_COLORS) for i in range(NUM_COLORS)])
+for k in alldiffs:
+    plt.semilogy(np.array(alldiffs[k]))
+legend = list('$N = {}$'.format(k) for k in alldiffs)
+plt.xlabel('Contact iteration')
+plt.ylabel('Norm of the difference')
+plt.legend(legend, prop={'size': 7})
+plt.savefig('test3_adaptive_contact_convergence.pdf')
+plt.close()
 #show()
 
