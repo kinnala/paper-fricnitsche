@@ -222,11 +222,12 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
         def traction_zero(w):
             h = w.h
             n = w.n
-            si1, si2 = w.w
+            si1 = w.w1
+            si2 = w.w2
             return h * (si1 * n[0] + si2 * n[1]) ** 2
 
-        eta_neumann = (traction_zero.elemental(fbasis, w=s1)
-                       + traction_zero.elemental(fbasis, w=s2))
+        eta_neumann = (traction_zero.elemental(fbasis, w1=s1[0], w2=s1[1])
+                       + traction_zero.elemental(fbasis, w1=s2[0], w2=s2[1]))
 
         tmp = np.zeros(m.facets.shape[1])
         np.add.at(tmp, fbasis.find, eta_neumann)

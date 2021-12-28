@@ -16,11 +16,25 @@ with import <nixpkgs> {};
     };
     doCheck = false;
   };
+  skfem520 = python38.pkgs.buildPythonPackage rec {
+    pname = "scikit-fem";
+    version = "5.2.0";
+    format = "pyproject";
+    propagatedBuildInputs = [
+      python38.pkgs.numpy
+      python38.pkgs.scipy
+    ];
+    src = python38.pkgs.fetchPypi {
+      inherit pname version;
+      sha256 = "0yf8pz4ynzzmsypqdmp8xyfj2al5az6qr2skdfzvjq1pyqwqi5jz";
+    };
+    doCheck = false;
+  };
 in python38.withPackages (ps: with ps; [
   numpy
   scipy
   meshio
   matplotlib
   ipython
-  skfem310
+  skfem520
 ])).env
