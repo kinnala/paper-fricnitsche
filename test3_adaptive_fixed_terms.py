@@ -73,14 +73,11 @@ for k in range(maxiters):
         sut = ddot(nxt, C(sym_grad(u)))
         svt = ddot(nxt, C(sym_grad(v)))
 
-
-
         normal = (1. / (alpha * w.h) * un * vn - sun * vn - svn * un)
 
         lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
         ind = indicator(lambdat)
-        #tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut + alpha * w.h * sut * svt) * (np.abs(lambdat) < kappa)
-        #tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut + alpha * w.h * sut * svt) * ind[:, None]
+
         tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut) * ind[:, None] - alpha * w.h * sut * svt * (~ind[:, None])
 
         return normal + tangent
@@ -110,8 +107,6 @@ for k in range(maxiters):
 
         ind = ~indicator(lambdat)
 
-        #return skappa * vt * (np.abs(lambdat) >= kappa)
-        #return skappa * vt * ind[:, None] + (1. / (alpha * w.h) * gap(w.x) * vn - svn * gap(w.x))
         return skappa * vt * ind[:, None] - skappa * w.h * alpha * svn * ind[:, None] + (1. / (alpha * w.h) * gap(w.x) * vn - svn * gap(w.x))
 
     xprev = basis.zeros()
@@ -125,13 +120,10 @@ for k in range(maxiters):
         D = basis.get_dofs(lambda x: x[0] == 0.0)
 
         x = np.zeros(K.shape[0])
-        #x[D.nodal['u^1']] = 0.1
-        #x[D.facet['u^1']] = 0.1
 
-        #x = solve(*condense(K + B, g, D=D.all('u^1'), x=x))
         x = solve(*condense(K + B, g, D=D.all(), x=x))
 
-        diff = np.linalg.norm(x - xprev)
+        diff = np.sqrt(K.dot(x - xprev).dot(x - xprev))
         diffs.append(diff)
         if diff < 1e-10:
             break
@@ -259,8 +251,7 @@ for k in range(maxiters):
         nxt = prod(w.n, t)
         lambdan = 1. / (alpha * w.h) * (dot(w['sol'], n) - gap(w.x)) - ddot(nxn, C(sym_grad(w['sol'])))
         gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
-        #ind = indicator(gammat)
-        #lambdat = gammat * ind[:, None] - kappa * np.sign(w.x[1]) * (~ind[:, None])
+
         lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
         sun = ddot(nxn, C(sym_grad(w['sol'])))
         sut = ddot(nxt, C(sym_grad(w['sol'])))
@@ -288,8 +279,7 @@ for k in range(maxiters):
         gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
         sun = -ddot(nxn, C(sym_grad(w['sol'])))
         sut = -ddot(nxt, C(sym_grad(w['sol'])))
-        #ind = indicator(gammat)
-        #lambdat = gammat * ind[:, None] - kappa * np.sign(w.x[1]) * (~ind[:, None])
+
         lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
         import matplotlib.pyplot as plt
         ix = np.argsort(w.x[1].flatten())
@@ -386,9 +376,8 @@ for k in alldiffs:
     plt.semilogy(np.array(alldiffs[k]))
 legend = list('$N = {}$'.format(k) for k in alldiffs)
 plt.xlabel('Contact iteration')
-plt.ylabel('Norm of the difference')
+plt.ylabel('Energy norm of the difference')
 plt.legend(legend, prop={'size': 7})
 plt.savefig('test3_adaptive_contact_convergence.pdf')
 plt.close()
-#show()
 
