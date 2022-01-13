@@ -286,9 +286,6 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
         return ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] < 0)) ** 2 + ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] > 0)) * lambdan + (kappa * np.abs(w['sol'].value[1]) - np.abs(w['sol'].value[1] * lambdat))
 
     S_term_val = S_term.elemental(fbasis_G, sol=fbasis_G.interpolate(x))
-    tmp = np.zeros(m.facets.shape[1])
-    np.add.at(tmp, fbasis_G.find, S_term_val)
-    eta_G = np.sum(.5 * tmp[m.t2f], axis=0)
 
     ## lambda plot
     @Functional

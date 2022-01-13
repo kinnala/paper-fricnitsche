@@ -20,6 +20,7 @@ def indicator(lambdat):
     return np.abs(lambdat).mean(axis=1) < kappa
 
 alldiffs = {}
+parts = []
 
 for k in range(maxiters):
 
@@ -255,15 +256,14 @@ for k in range(maxiters):
         lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
         sun = ddot(nxn, C(sym_grad(w['sol'])))
         sut = ddot(nxt, C(sym_grad(w['sol'])))
-        return (0. * 1. / h * ((w['sol'].value[0] - gap(w.x)) * (w['sol'].value[0] - gap(w.x) > 0)) ** 2
-                + h * (lambdat + sut) ** 2
+        return (h * (lambdat + sut) ** 2
                 + h * (lambdan + sun) ** 2)
 
     fbasis_G = FacetBasis(m, e, facets=m.facets_satisfying(lambda x: x[0] == 1.))
     eta_G = contact_estimator.elemental(fbasis_G, sol=fbasis_G.interpolate(x))
     tmp = np.zeros(m.facets.shape[1])
     np.add.at(tmp, fbasis_G.find, eta_G)
-    eta_G = np.sum(.5 * tmp[m.t2f], axis=0)
+    eta_G = np.sum(0.5 * tmp[m.t2f], axis=0)
 
     ## S-term
     @Functional
@@ -286,9 +286,6 @@ for k in range(maxiters):
         return ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] < 0)) ** 2 + ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] > 0)) * lambdan + (kappa * np.abs(w['sol'].value[1]) - np.abs(w['sol'].value[1] * lambdat))
 
     S_term_val = S_term.elemental(fbasis_G, sol=fbasis_G.interpolate(x))
-    tmp = np.zeros(m.facets.shape[1])
-    np.add.at(tmp, fbasis_G.find, S_term_val)
-    eta_G = np.sum(.5 * tmp[m.t2f], axis=0)
 
     ## lambda plot
     @Functional
@@ -348,13 +345,19 @@ for k in range(maxiters):
 
     ## total estimator
     est = eta_K + eta_E + eta_N + eta_G
+    parts.append([len(x),
+                  np.sqrt(eta_K.sum()),
+                  np.sqrt(eta_E.sum()),
+                  np.sqrt(eta_N.sum()),
+                  np.sqrt(eta_G.sum()),
+                  np.sqrt(S_term_val.sum())])
 
     err = np.sqrt(Functional(lambda w: w['sol'].value[0] ** 2 + w['sol'].value[1] ** 2 + ddot(grad(w['sol']), grad(w['sol'])))
                   .assemble(basis, sol=basis.interpolate(x)))
     print("{},{},{},{}".format(len(x), err, np.sqrt(np.sum(est)), np.sqrt(S_term_val.sum())))
 
     # plots
-    if k == maxiters - 1 or len(x) > 7600:
+    if k == maxiters - 1 or len(x) > 15000:#7600:
         # estimators
         #plot(m, est1)
 
@@ -406,3 +409,18 @@ plt.legend(legend)
 plt.savefig('test3_adaptive_contact_convergence.pdf')
 plt.close()
 
+plt.figure()
+parts = np.array(parts)
+for k in range(parts.shape[1] - 1):
+    plt.loglog(parts[:, 0], parts[:, k + 1])
+plt.loglog([1e3, 1e4], [1e-4, 1e-5], 'k:')
+plt.legend(['$\sqrt{\sum_{K \in \mathcal{T}_h} \eta_K^2}$',
+            '$\sqrt{\sum_{E \in \mathcal{E}_h} \eta_{E,\Omega}^2}$',
+            '$\sqrt{\sum_{E \in \mathcal{F}_h} \eta_{E,\Gamma_N}^2}$',
+            '$\sqrt{\sum_{E \in \mathcal{G}_h} \eta_{E,\Gamma}^2}$',
+            '$S$',
+            '$O(N^{-1})$'])
+plt.xlabel('$N$')
+plt.grid('major')
+plt.savefig('test3_adaptive_estimator_split.pdf')
+plt.close()
