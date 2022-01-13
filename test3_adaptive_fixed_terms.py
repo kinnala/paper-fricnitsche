@@ -265,6 +265,31 @@ for k in range(maxiters):
     np.add.at(tmp, fbasis_G.find, eta_G)
     eta_G = np.sum(.5 * tmp[m.t2f], axis=0)
 
+    ## S-term
+    @Functional
+    def S_term(w):
+        h = w.h
+        n = w.n.copy()
+        t = w.n.copy()
+        t[0] = w.n[1]
+        t[1] = -w.n[0]
+        nxn = prod(w.n, w.n)
+        nxt = prod(w.n, t)
+        lambdan = 1. / (alpha * w.h) * (dot(w['sol'], n) - gap(w.x)) - ddot(nxn, C(sym_grad(w['sol'])))
+        gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
+
+        lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
+        sun = ddot(nxn, C(sym_grad(w['sol'])))
+        sut = ddot(nxt, C(sym_grad(w['sol'])))
+        # lambdat, sut
+        # lambdan, sun
+        return ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] < 0)) ** 2 + ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] > 0)) * lambdan + (kappa * np.abs(w['sol'].value[1]) - np.abs(w['sol'].value[1] * lambdat))
+
+    S_term_val = S_term.elemental(fbasis_G, sol=fbasis_G.interpolate(x))
+    tmp = np.zeros(m.facets.shape[1])
+    np.add.at(tmp, fbasis_G.find, S_term_val)
+    eta_G = np.sum(.5 * tmp[m.t2f], axis=0)
+
     ## lambda plot
     @Functional
     def lambdat(w):
@@ -326,7 +351,7 @@ for k in range(maxiters):
 
     err = np.sqrt(Functional(lambda w: w['sol'].value[0] ** 2 + w['sol'].value[1] ** 2 + ddot(grad(w['sol']), grad(w['sol'])))
                   .assemble(basis, sol=basis.interpolate(x)))
-    print("{},{},{}".format(len(x), err, np.sqrt(np.sum(est))))
+    print("{},{},{},{}".format(len(x), err, np.sqrt(np.sum(est)), np.sqrt(S_term_val.sum())))
 
     # plots
     if k == maxiters - 1 or len(x) > 7600:
@@ -362,22 +387,22 @@ for k in range(maxiters):
 
         break
 
-    #mdefo = m.translated(x[basis.nodal_dofs])
-    #draw(mdefo)
-
     m = m.refined(adaptive_theta(est, theta=0.7))
 
-NUM_COLORS = 21
+import math
+NUM_COLORS = math.ceil(21.0/5.0)
 cm = plt.get_cmap('gist_rainbow')
 fig = plt.figure()
 ax = fig.add_subplot(111)
 ax.set_prop_cycle(color=[cm(1.*i/NUM_COLORS) for i in range(NUM_COLORS)])
+i = 0
+alldiffs = {k: alldiffs[k] for i, k in enumerate(alldiffs.keys()) if i % 5 == 0}
 for k in alldiffs:
     plt.semilogy(np.array(alldiffs[k]))
 legend = list('$N = {}$'.format(k) for k in alldiffs)
 plt.xlabel('Contact iteration')
 plt.ylabel('Energy norm of the difference')
-plt.legend(legend, prop={'size': 7})
+plt.legend(legend)
 plt.savefig('test3_adaptive_contact_convergence.pdf')
 plt.close()
 

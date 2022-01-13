@@ -114,26 +114,23 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
     diffs = []
     for itr in range(maxciters):
 
-            B = asm(nitsche, fbasis, prev=fbasis.interpolate(xprev))
+        B = asm(nitsche, fbasis, prev=fbasis.interpolate(xprev))
 
-            f = asm(nitsche_load, fbasis, prev=fbasis.interpolate(xprev))
+        f = asm(nitsche_load, fbasis, prev=fbasis.interpolate(xprev))
 
-            D = basis.get_dofs(lambda x: x[0] == 0.0)
+        D = basis.get_dofs(lambda x: x[0] == 0.0)
 
-            x = np.zeros(K.shape[0])
-            #x[D.nodal['u^1']] = 0.1
-            #x[D.facet['u^1']] = 0.1
+        x = np.zeros(K.shape[0])
 
-            x = solve(*condense(K + B, f, D=D.all(), x=x))
+        x = solve(*condense(K + B, f, D=D.all(), x=x))
 
-            diff = np.linalg.norm(x - xprev)
-            diffs.append(diff)
-            if itr == maxciters - 1:
-                print("WARNING! contact iteration not terminating.")
-            #print(diff)
-            if diff < 1e-9:
-                break
-            xprev = x.copy()
+        diff = np.sqrt(K.dot(x - xprev).dot(x - xprev))
+        diffs.append(diff)
+        if itr == maxciters - 1:
+            print("WARNING! contact iteration not terminating.")
+        if diff < 1e-10:
+            break
+        xprev = x.copy()
 
     alldiffs[len(xprev)] = diffs
 
@@ -268,6 +265,31 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
     np.add.at(tmp, fbasis_G.find, eta_G)
     eta_G = np.sum(.5 * tmp[m.t2f], axis=0)
 
+    ## S-term
+    @Functional
+    def S_term(w):
+        h = w.h
+        n = w.n.copy()
+        t = w.n.copy()
+        t[0] = w.n[1]
+        t[1] = -w.n[0]
+        nxn = prod(w.n, w.n)
+        nxt = prod(w.n, t)
+        lambdan = 1. / (alpha * w.h) * (dot(w['sol'], n) - gap(w.x)) - ddot(nxn, C(sym_grad(w['sol'])))
+        gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
+
+        lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
+        sun = ddot(nxn, C(sym_grad(w['sol'])))
+        sut = ddot(nxt, C(sym_grad(w['sol'])))
+        # lambdat, sut
+        # lambdan, sun
+        return ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] < 0)) ** 2 + ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] > 0)) * lambdan + (kappa * np.abs(w['sol'].value[1]) - np.abs(w['sol'].value[1] * lambdat))
+
+    S_term_val = S_term.elemental(fbasis_G, sol=fbasis_G.interpolate(x))
+    tmp = np.zeros(m.facets.shape[1])
+    np.add.at(tmp, fbasis_G.find, S_term_val)
+    eta_G = np.sum(.5 * tmp[m.t2f], axis=0)
+
     ## lambda plot
     @Functional
     def lambdat(w):
@@ -331,7 +353,7 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
 
     err = np.sqrt(Functional(lambda w: w['sol'].value[0] ** 2 + w['sol'].value[1] ** 2 + ddot(grad(w['sol']), grad(w['sol'])))
                   .assemble(basis, sol=basis.interpolate(x)))
-    print("{},{},{},{}".format(m.param(), len(x), err, np.sqrt(np.sum(est))))
+    print("{},{},{},{},{}".format(m.param(), len(x), err, np.sqrt(np.sum(est)), np.sqrt(S_term_val.sum())))
 
     errprev = err
 
@@ -368,9 +390,8 @@ for k in alldiffs:
     plt.semilogy(np.array(alldiffs[k]))
 legend = list('$N = {}$'.format(k) for k in alldiffs)
 plt.xlabel('Contact iteration')
-plt.ylabel('Norm of the difference')
+plt.ylabel('Energy norm of the difference')
 plt.legend(legend)
 plt.savefig('test3_uniform_contact_convergence.pdf')
 plt.close()
-#show()
 
