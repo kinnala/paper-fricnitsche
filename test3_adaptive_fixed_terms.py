@@ -16,8 +16,9 @@ maxiters = 50
 
 kappa = 0.02
 
-def indicator(lambdat):
-    return np.abs(lambdat).mean(axis=1) < kappa
+def indicator(ut, lambdat):
+    #return np.abs(lambdat * ut) < kappa * np.abs(ut)
+    return (np.abs(lambdat).mean(axis=1) < kappa)[:, None]
 
 alldiffs = {}
 parts = []
@@ -77,9 +78,9 @@ for k in range(maxiters):
         normal = (1. / (alpha * w.h) * un * vn - sun * vn - svn * un)
 
         lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
-        ind = indicator(lambdat)
+        ind = indicator(dot(uprev, t), lambdat)
 
-        tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut) * ind[:, None] - alpha * w.h * sut * svt * (~ind[:, None])
+        tangent = (1. / (alpha * w.h) * ut * vt - sut * vt - svt * ut) * ind - alpha * w.h * sut * svt * (~ind)
 
         return normal + tangent
 
@@ -106,9 +107,9 @@ for k in range(maxiters):
 
         lambdat = 1. / (alpha * w.h) * dot(uprev, t) - ddot(nxt, C(sym_grad(uprev)))
 
-        ind = ~indicator(lambdat)
+        ind = ~indicator(dot(uprev, t), lambdat)
 
-        return skappa * vt * ind[:, None] - skappa * w.h * alpha * svn * ind[:, None] + (1. / (alpha * w.h) * gap(w.x) * vn - svn * gap(w.x))
+        return skappa * vt * ind - skappa * w.h * alpha * svn * ind + (1. / (alpha * w.h) * gap(w.x) * vn - svn * gap(w.x))
 
     xprev = basis.zeros()
     diffs = []
@@ -118,11 +119,11 @@ for k in range(maxiters):
 
         g = asm(nitsche_load, fbasis, prev=fbasis.interpolate(xprev))
 
-        D = basis.get_dofs(lambda x: x[0] == 0.0)
+        D = basis.get_dofs(lambda x: x[0] == 0.)
 
         x = np.zeros(K.shape[0])
 
-        x = solve(*condense(K + B, g, D=D.all(), x=x))
+        x = solve(*condense(K + B, g, D=D.all('u^1'), x=x))
 
         diff = np.sqrt(K.dot(x - xprev).dot(x - xprev))
         diffs.append(diff / np.linalg.norm(x))
@@ -263,7 +264,7 @@ for k in range(maxiters):
     eta_G = contact_estimator.elemental(fbasis_G, sol=fbasis_G.interpolate(x))
     tmp = np.zeros(m.facets.shape[1])
     np.add.at(tmp, fbasis_G.find, eta_G)
-    eta_G = np.sum(0.5 * tmp[m.t2f], axis=0)
+    eta_G = np.sum(tmp[m.t2f], axis=0)
 
     ## S-term
     @Functional
@@ -279,13 +280,21 @@ for k in range(maxiters):
         gammat = 1. / (alpha * w.h) * dot(w['sol'], t) - ddot(nxt, C(sym_grad(w['sol'])))
 
         lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
+        #lambdat = gammat
         sun = ddot(nxn, C(sym_grad(w['sol'])))
         sut = ddot(nxt, C(sym_grad(w['sol'])))
         # lambdat, sut
         # lambdan, sun
-        return ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] < 0)) ** 2 + ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] > 0)) * lambdan + (kappa * np.abs(w['sol'].value[1]) - np.abs(w['sol'].value[1] * lambdat))
+        return (
+            ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] < 0)) ** 2
+            + 0*((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] > 0)) * lambdan
+            + (kappa * np.abs(w['sol'].value[1]) + w['sol'].value[1] * lambdat)
+        )
 
     S_term_val = S_term.elemental(fbasis_G, sol=fbasis_G.interpolate(x))
+    tmp = np.zeros(m.facets.shape[1])
+    np.add.at(tmp, fbasis_G.find, S_term_val)
+    eta_S = np.sum(tmp[m.t2f], axis=0)
 
     ## lambda plot
     @Functional
@@ -344,7 +353,7 @@ for k in range(maxiters):
     lambdat = lambdat.elemental(fbasis_lambda, sol=fbasis_lambda.interpolate(x))
 
     ## total estimator
-    est = eta_K + eta_E + eta_N + eta_G
+    est = eta_K + eta_E + eta_N + eta_G + eta_S
     parts.append([len(x),
                   np.sqrt(eta_K.sum()),
                   np.sqrt(eta_E.sum()),
@@ -356,17 +365,21 @@ for k in range(maxiters):
                   .assemble(basis, sol=basis.interpolate(x)))
     print("{},{},{},{}".format(len(x), err, np.sqrt(np.sum(est)), np.sqrt(S_term_val.sum())))
 
+    plot(m, eta_G)
+    plt.savefig('test3_adaptive_est_{}.pdf'.format(k))
+    plt.close()
+
+    mdefo = m.translated(x[basis.nodal_dofs])
+    draw(mdefo)
+    plt.savefig('test3_adaptive_defo_{}.pdf'.format(k))
+    plt.close()
+
     # plots
-    if k == maxiters - 1 or len(x) > 5200:
+    if k == maxiters - 1 or len(x) > 7000:#5200:
 
         # stresses
-        ax = plot(basis_dg, s[0, 1], Nrefs=3, shading='gouraud', colorbar=True)
+        ax = plot(basis_dg, s[0, 1], Nrefs=2, shading='gouraud', colorbar=True)
         plt.savefig('test3_adaptive_s01_{}.pdf'.format(k))
-        plt.close()
-
-        mdefo = m.translated(x[basis.nodal_dofs])
-        draw(mdefo)
-        plt.savefig('test3_adaptive_defo_{}.pdf'.format(k))
         plt.close()
 
         # displacement

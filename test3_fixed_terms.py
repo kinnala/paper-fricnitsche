@@ -122,7 +122,7 @@ for k in [1, 2, 3, 4, 5, 6]:
 
         x = np.zeros(K.shape[0])
 
-        x = solve(*condense(K + B, f, D=D.all(), x=x))
+        x = solve(*condense(K + B, f, D=D.all('u^1'), x=x))
 
         diff = np.sqrt(K.dot(x - xprev).dot(x - xprev))
         diffs.append(diff / np.linalg.norm(x))
@@ -255,15 +255,14 @@ for k in [1, 2, 3, 4, 5, 6]:
         lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
         sun = ddot(nxn, C(sym_grad(w['sol'])))
         sut = ddot(nxt, C(sym_grad(w['sol'])))
-        return (0. * 1. / h * ((w['sol'].value[0] - gap(w.x)) * (w['sol'].value[0] - gap(w.x) > 0)) ** 2
-                + h * (lambdat + sut) ** 2
+        return (h * (lambdat + sut) ** 2
                 + h * (lambdan + sun) ** 2)
 
     fbasis_G = FacetBasis(m, e, facets=m.facets_satisfying(lambda x: x[0] == 1.))
     eta_G = contact_estimator.elemental(fbasis_G, sol=fbasis_G.interpolate(x))
     tmp = np.zeros(m.facets.shape[1])
     np.add.at(tmp, fbasis_G.find, eta_G)
-    eta_G = np.sum(.5 * tmp[m.t2f], axis=0)
+    eta_G = np.sum(tmp[m.t2f], axis=0)
 
     ## S-term
     @Functional
