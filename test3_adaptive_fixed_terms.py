@@ -125,7 +125,7 @@ for k in range(maxiters):
         x = solve(*condense(K + B, g, D=D.all(), x=x))
 
         diff = np.sqrt(K.dot(x - xprev).dot(x - xprev))
-        diffs.append(diff)
+        diffs.append(diff / np.linalg.norm(x))
         if diff < 1e-10:
             break
         xprev = x.copy()
@@ -357,9 +357,7 @@ for k in range(maxiters):
     print("{},{},{},{}".format(len(x), err, np.sqrt(np.sum(est)), np.sqrt(S_term_val.sum())))
 
     # plots
-    if k == maxiters - 1 or len(x) > 15000:#7600:
-        # estimators
-        #plot(m, est1)
+    if k == maxiters - 1 or len(x) > 5200:
 
         # stresses
         ax = plot(basis_dg, s[0, 1], Nrefs=3, shading='gouraud', colorbar=True)
@@ -393,26 +391,28 @@ for k in range(maxiters):
     m = m.refined(adaptive_theta(est, theta=0.7))
 
 import math
-NUM_COLORS = math.ceil(21.0/5.0)
+NUM_COLORS = math.ceil(21.0)
 cm = plt.get_cmap('gist_rainbow')
 fig = plt.figure()
 ax = fig.add_subplot(111)
 ax.set_prop_cycle(color=[cm(1.*i/NUM_COLORS) for i in range(NUM_COLORS)])
 i = 0
-alldiffs = {k: alldiffs[k] for i, k in enumerate(alldiffs.keys()) if i % 5 == 0}
+alldiffs = {k: alldiffs[k] for i, k in enumerate(alldiffs.keys())}
 for k in alldiffs:
     plt.semilogy(np.array(alldiffs[k]))
 legend = list('$N = {}$'.format(k) for k in alldiffs)
 plt.xlabel('Contact iteration')
-plt.ylabel('Energy norm of the difference')
+plt.ylabel('Relative change in the energy norm')
 plt.legend(legend)
+plt.grid('major')
 plt.savefig('test3_adaptive_contact_convergence.pdf')
 plt.close()
 
 plt.figure()
 parts = np.array(parts)
+colork = ['x-', 'o-', 's-', '^-', 'v-', 's:']
 for k in range(parts.shape[1] - 1):
-    plt.loglog(parts[:, 0], parts[:, k + 1])
+    plt.loglog(parts[:, 0], parts[:, k + 1], colork[k])
 plt.loglog([1e3, 1e4], [1e-4, 1e-5], 'k:')
 plt.legend(['$\sqrt{\sum_{K \in \mathcal{T}_h} \eta_K^2}$',
             '$\sqrt{\sum_{E \in \mathcal{E}_h} \eta_{E,\Omega}^2}$',

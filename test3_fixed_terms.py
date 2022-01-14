@@ -125,7 +125,7 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
         x = solve(*condense(K + B, f, D=D.all(), x=x))
 
         diff = np.sqrt(K.dot(x - xprev).dot(x - xprev))
-        diffs.append(diff)
+        diffs.append(diff / np.linalg.norm(x))
         if itr == maxciters - 1:
             print("WARNING! contact iteration not terminating.")
         if diff < 1e-10:
@@ -387,8 +387,9 @@ for k in alldiffs:
     plt.semilogy(np.array(alldiffs[k]))
 legend = list('$N = {}$'.format(k) for k in alldiffs)
 plt.xlabel('Contact iteration')
-plt.ylabel('Energy norm of the difference')
+plt.ylabel('Relative change in the energy norm')
 plt.legend(legend)
+plt.grid('major')
 plt.savefig('test3_uniform_contact_convergence.pdf')
 plt.close()
 
