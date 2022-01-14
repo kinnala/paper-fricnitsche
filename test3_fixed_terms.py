@@ -16,7 +16,7 @@ def indicator(lambdat):
 
 alldiffs = {}
 
-for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
+for k in [1, 2, 3, 4, 5, 6]:
 
     m = (MeshTri
          .init_sqsymmetric()
@@ -302,7 +302,7 @@ for k in [1, 2, 3, 4, 5, 6]:# 5, 6]:
         sun = -ddot(nxn, C(sym_grad(w['sol'])))
         sut = -ddot(nxt, C(sym_grad(w['sol'])))
         ind = indicator(gammat)
-        #lambdat = gammat * ind[:, None] - kappa * np.sign(w.x[1]) * (~ind[:, None])
+
         lambdat = gammat * (np.abs(gammat) < kappa) - kappa * np.sign(w.x[1]) * (np.abs(gammat) >= kappa)
         import matplotlib.pyplot as plt
         ix = np.argsort(w.x[1].flatten())
