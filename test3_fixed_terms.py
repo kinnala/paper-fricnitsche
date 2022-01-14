@@ -283,7 +283,9 @@ for k in [1, 2, 3, 4, 5, 6]:
         sut = ddot(nxt, C(sym_grad(w['sol'])))
         # lambdat, sut
         # lambdan, sun
-        return ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] < 0)) ** 2 + ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] > 0)) * lambdan + (kappa * np.abs(w['sol'].value[1]) - np.abs(w['sol'].value[1] * lambdat))
+        return (
+            (kappa * np.abs(w['sol'].value[1]) - np.abs(w['sol'].value[1] * lambdat))
+        )
 
     S_term_val = S_term.elemental(fbasis_G, sol=fbasis_G.interpolate(x))
 

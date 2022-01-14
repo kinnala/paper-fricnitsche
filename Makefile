@@ -5,11 +5,11 @@ default:
 
 export:
 	mkdir -p export
-	pdfcrop {,export/}test3_adaptive_defo_20.pdf
-	pdfcrop {,export/}test3_adaptive_lambdan_20.pdf
-	pdfcrop {,export/}test3_adaptive_lambdat_20.pdf
-	pdfcrop {,export/}test3_adaptive_un_20.pdf
-	pdfcrop {,export/}test3_adaptive_ut_20.pdf
+	pdfcrop {,export/}test3_adaptive_defo_21.pdf
+	pdfcrop {,export/}test3_adaptive_lambdan_21.pdf
+	pdfcrop {,export/}test3_adaptive_lambdat_21.pdf
+	pdfcrop {,export/}test3_adaptive_un_21.pdf
+	pdfcrop {,export/}test3_adaptive_ut_21.pdf
 	pdfcrop {,export/}test3_uniform_defo_4.pdf
 	pdfcrop {,export/}test3_uniform_lambdan_4.pdf
 	pdfcrop {,export/}test3_uniform_lambdat_4.pdf
@@ -18,6 +18,7 @@ export:
 	pdfcrop {,export/}test3_plot_convergence.pdf
 	pdfcrop {,export/}test3_uniform_contact_convergence.pdf
 	pdfcrop {,export/}test3_adaptive_contact_convergence.pdf
+	pdfcrop {,export/}test3_adaptive_estimator_split.pdf
 
 clean:
 	rm -r export/

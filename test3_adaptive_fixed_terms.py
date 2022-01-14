@@ -40,7 +40,6 @@ for k in range(maxiters):
     C = linear_stress(Lambda, Mu)
 
     alpha = 1e-3
-    alternative = False
 
     K = asm(weakform, basis)
 
@@ -283,7 +282,9 @@ for k in range(maxiters):
         sut = ddot(nxt, C(sym_grad(w['sol'])))
         # lambdat, sut
         # lambdan, sun
-        return ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] < 0)) ** 2 + ((gap(w.x) - w['sol'].value[0]) * (gap(w.x) - w['sol'].value[0] > 0)) * lambdan + (kappa * np.abs(w['sol'].value[1]) - np.abs(w['sol'].value[1] * lambdat))
+        return (
+            (kappa * np.abs(w['sol'].value[1]) - np.abs(w['sol'].value[1] * lambdat))
+        )
 
     S_term_val = S_term.elemental(fbasis_G, sol=fbasis_G.interpolate(x))
 
@@ -357,7 +358,7 @@ for k in range(maxiters):
     print("{},{},{},{}".format(len(x), err, np.sqrt(np.sum(est)), np.sqrt(S_term_val.sum())))
 
     # plots
-    if k == maxiters - 1 or len(x) > 5200:
+    if k == maxiters - 1 or len(x) > 7900:
 
         # stresses
         ax = plot(basis_dg, s[0, 1], Nrefs=3, shading='gouraud', colorbar=True)
@@ -403,7 +404,7 @@ for k in alldiffs:
 legend = list('$N = {}$'.format(k) for k in alldiffs)
 plt.xlabel('Contact iteration')
 plt.ylabel('Relative change in the energy norm')
-plt.legend(legend)
+plt.legend(legend, fontsize=8)
 plt.grid('major')
 plt.savefig('test3_adaptive_contact_convergence.pdf')
 plt.close()
